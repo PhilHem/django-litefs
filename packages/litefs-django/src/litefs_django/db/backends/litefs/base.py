@@ -163,3 +163,12 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
     def create_cursor(self, name=None):
         """Create cursor with primary detection."""
         return LiteFSCursor(self.connection, self._primary_detector)
+
+    def _start_transaction_under_autocommit(self):
+        """Start transaction with IMMEDIATE mode for better lock handling.
+
+        Overrides Django's default BEGIN (DEFERRED) to use BEGIN IMMEDIATE,
+        which acquires a write lock immediately and prevents lock contention
+        under concurrent load. This is required for LiteFS's single-writer model.
+        """
+        self.cursor().execute("BEGIN IMMEDIATE")

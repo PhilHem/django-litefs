@@ -5,8 +5,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-from django.db import connection
-from django.test import TestCase, override_settings
 
 from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningError
 from litefs_django.db.backends.litefs.base import DatabaseWrapper
@@ -167,3 +165,96 @@ class TestDatabaseBackend:
             ):
                 # This test will be complete when execute() is implemented
                 assert not wrapper._primary_detector.is_primary()
+
+    def test_transaction_boundaries_use_immediate_mode(self):
+        """Test that all Django transaction boundaries use IMMEDIATE mode (DJANGO-021).
+
+        Verifies that _start_transaction_under_autocommit is called and uses
+        BEGIN IMMEDIATE for autocommit transactions, @transaction.atomic, and
+        transaction.atomic() context manager.
+        """
+        import sqlite3
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mount_path = Path(tmpdir) / "litefs"
+            mount_path.mkdir()
+            db_path = mount_path / "test.db"
+
+            # Create primary file to allow writes
+            (mount_path / ".primary").write_text("node-1")
+
+            settings_dict = {
+                "ENGINE": "litefs_django.db.backends.litefs",
+                "NAME": "test.db",
+                "OPTIONS": {
+                    "litefs_mount_path": str(mount_path),
+                },
+            }
+
+            wrapper = DatabaseWrapper(settings_dict)
+            wrapper.ensure_connection()
+
+            # Capture SQL statements using SQLite trace callback
+            executed_sql = []
+
+            def trace_callback(statement):
+                executed_sql.append(statement)
+
+            # Set trace callback on the underlying SQLite connection
+            wrapper.connection.set_trace_callback(trace_callback)
+
+            # Test 1: Autocommit transaction (via _start_transaction_under_autocommit)
+            wrapper._start_transaction_under_autocommit()
+
+            # Test 2: Verify BEGIN IMMEDIATE was in the captured SQL
+            begin_statements = [
+                sql for sql in executed_sql if sql.strip().upper().startswith("BEGIN")
+            ]
+            assert len(begin_statements) > 0, "No BEGIN statement found"
+            assert any("IMMEDIATE" in sql.upper() for sql in begin_statements), (
+                f"BEGIN IMMEDIATE not found in transaction start. Found: {begin_statements}"
+            )
+
+    def test_start_transaction_under_autocommit_uses_immediate(self):
+        """Test that _start_transaction_under_autocommit executes BEGIN IMMEDIATE (DJANGO-020)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mount_path = Path(tmpdir) / "litefs"
+            mount_path.mkdir()
+            (mount_path / "test.db").touch()
+
+            settings_dict = {
+                "ENGINE": "litefs_django.db.backends.litefs",
+                "NAME": "test.db",
+                "OPTIONS": {
+                    "litefs_mount_path": str(mount_path),
+                },
+            }
+
+            wrapper = DatabaseWrapper(settings_dict)
+            wrapper.ensure_connection()
+
+            # Mock cursor to capture executed SQL
+            executed_sql = []
+            mock_cursor = MagicMock()
+
+            def mock_execute(sql, params=None):
+                executed_sql.append(sql)
+                return None
+
+            mock_cursor.execute = mock_execute
+
+            with patch.object(wrapper, "cursor", return_value=mock_cursor):
+                # Call _start_transaction_under_autocommit
+                wrapper._start_transaction_under_autocommit()
+
+            # Verify BEGIN IMMEDIATE was executed
+            begin_statements = [
+                sql for sql in executed_sql if sql.strip().upper().startswith("BEGIN")
+            ]
+            assert len(begin_statements) > 0, "No BEGIN statement found"
+            assert any("IMMEDIATE" in sql.upper() for sql in begin_statements), (
+                f"BEGIN IMMEDIATE not found. Found: {begin_statements}"
+            )

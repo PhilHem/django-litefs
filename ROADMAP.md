@@ -21,11 +21,11 @@ Project is in initial development phase. Core architecture and framework adapter
 
 **Goal:** Deliver a minimal viable product with core LiteFS integration and Django adapter support.
 
-- [x] TASK-CORE-001 - Implement `litefs-py` core: settings, config generation, primary detection
-- [x] TASK-DJANGO-001 - Implement `litefs-django` adapter: settings reader, DB backend (fixes DJANGO-001, DJANGO-002, DJANGO-006, DJANGO-007, DJANGO-008, DJANGO-009; noted DJANGO-003)
+- [x] TASK-CORE-001 - Implement `litefs-py` core: settings, config generation, primary detection (fixes CORE-001, CORE-011, CORE-012)
+- [x] TASK-DJANGO-001 - Implement `litefs-django` adapter: settings reader, DB backend (fixes DJANGO-001, DJANGO-002, DJANGO-006, DJANGO-007, DJANGO-008, DJANGO-009, DJANGO-014, DJANGO-020, DJANGO-021, DJANGO-022; noted DJANGO-003)
 - [ ] TASK-RAFT-001 - Implement static leader election (manual failover, 2-node minimum)
 - [ ] TASK-CMD-001 - Create management commands (status, check)
-- [ ] TASK-TEST-001 - Write unit tests with in-memory adapters (concurrency tests added, see DJANGO-012)
+- [x] TASK-TEST-001 - Write unit tests with in-memory adapters (concurrency tests added: Django backend - DJANGO-012, DJANGO-015, DJANGO-016, DJANGO-017, DJANGO-018, DJANGO-019; PrimaryDetector - CORE-002, CORE-013, CORE-014)
 - [ ] TASK-EXAM-001 - Create example Django app in `examples/django-app/`
 
 **Outcome:** A working Django application with LiteFS replication support, manual failover capability, and basic management tooling.

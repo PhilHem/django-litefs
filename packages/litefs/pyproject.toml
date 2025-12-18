@@ -22,7 +22,8 @@ markers = [
     "unit: Unit tests (fast, no LiteFS process)",
     "integration: Integration tests (requires Docker + FUSE)",
     "property: Property-based tests",
+    "concurrency: Concurrency tests",
 ]
 
 [dependency-groups]
-dev = ["pytest>=9.0.2"]
+dev = ["pytest>=9.0.2", "hypothesis>=6.0.0"]

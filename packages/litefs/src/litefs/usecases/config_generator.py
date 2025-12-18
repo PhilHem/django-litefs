@@ -34,6 +34,9 @@ class ConfigGenerator:
             "lease": {
                 "type": settings.leader_election,
             },
+            "proxy": {
+                "addr": settings.proxy_addr,
+            },
         }
 
         return yaml.dump(config, default_flow_style=False)
