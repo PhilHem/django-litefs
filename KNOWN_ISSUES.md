@@ -27,12 +27,16 @@
 | DJANGO-004 | MED | unconfirmed | hex-analysis | DB backend write operations on replica may not be caught if primary check result is stale (cached or checked before failover). Missing concurrency test for stale state. | `litefs_django/db/backends/litefs/base.py` | 2025-12-18 |
 | DJANGO-005 | MED | unconfirmed | hex-analysis | DB backend connection initialization race if LiteFS not ready (mount path doesn't exist yet). Multiple threads may initialize connections simultaneously. Missing concurrency test. | `litefs_django/db/backends/litefs/base.py` | 2025-12-18 |
 | DJANGO-010 | MED | unconfirmed | tech-debt | [quality] [future] Simplistic write operation detection. `_is_write_operation` only checks start of SQL for keywords. Root cause: MVP priority. Remediation: Use robust SQL parsing. | `litefs_django/db/backends/litefs/base.py` | 2025-12-18 |
-| DJANGO-011 | MED | unconfirmed | tech-debt | [testing] [blocking] Missing integration tests for Django adapter. No verification with live connection/FUSE. Root cause: MVP priority. Remediation: Add integration tests. | `tests/django/integration/` | 2025-12-18 |
+| DJANGO-013 | MED | unconfirmed | hex-analysis | WAL mode setting contention: Multiple threads initializing connections simultaneously could all try to set `PRAGMA journal_mode=WAL`, causing contention. Missing concurrency test. | `litefs_django/db/backends/litefs/base.py:get_new_connection` | 2025-12-18 |
+| DJANGO-014 | MED | unconfirmed | hex-analysis | IMMEDIATE transaction mode may not be enforced in all transaction boundaries. Django might start transactions without IMMEDIATE mode after initial connection setup. Missing integration test for transaction mode persistence. | `litefs_django/db/backends/litefs/base.py:get_new_connection` | 2025-12-18 |
+| DJANGO-015 | MED | unconfirmed | hex-analysis | No integration test for concurrent thread access to database backend. Cannot verify that multiple threads can safely perform operations simultaneously with LiteFS. Missing probabilistic concurrency test. | `litefs_django/db/backends/litefs/base.py` | 2025-12-18 |
 
 ## Confirmed Issues
 
 | ID  | Complexity | Status | Source | Description | Location | Timestamp |
 | --- | ---------- | ------ | ------ | ----------- | -------- | --------- |
+| DJANGO-011 | MED | confirmed | tech-debt | [testing] [blocking] Integration test infrastructure created with placeholder tests. Tests skip gracefully when Docker/FUSE not available. Full implementation requires Docker Compose setup. | `tests/django/integration/` | 2025-12-18 |
+| DJANGO-012 | MED | confirmed | concurrency-test | Shared PrimaryDetector instance across threads tested. Concurrent is_primary() calls during failover work correctly - file.exists() is atomic. No race condition found. | `litefs_django/db/backends/litefs/base.py`, `litefs/usecases/primary_detector.py` | 2025-12-18 |
 
 ## Resolved Issues
 

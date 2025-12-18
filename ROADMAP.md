@@ -25,7 +25,7 @@ Project is in initial development phase. Core architecture and framework adapter
 - [x] TASK-DJANGO-001 - Implement `litefs-django` adapter: settings reader, DB backend (fixes DJANGO-001, DJANGO-002, DJANGO-006, DJANGO-007, DJANGO-008, DJANGO-009; noted DJANGO-003)
 - [ ] TASK-RAFT-001 - Implement static leader election (manual failover, 2-node minimum)
 - [ ] TASK-CMD-001 - Create management commands (status, check)
-- [ ] TASK-TEST-001 - Write unit tests with in-memory adapters
+- [ ] TASK-TEST-001 - Write unit tests with in-memory adapters (concurrency tests added, see DJANGO-012)
 - [ ] TASK-EXAM-001 - Create example Django app in `examples/django-app/`
 
 **Outcome:** A working Django application with LiteFS replication support, manual failover capability, and basic management tooling.
@@ -40,7 +40,7 @@ Project is in initial development phase. Core architecture and framework adapter
 - [ ] TASK-CORE-002 - Integrate `py-leader` into `litefs-py` as optional dependency
 - [ ] TASK-RAFT-003 - Implement automatic failover (3-node quorum)
 - [ ] TASK-HEALTH-001 - Add health checks with leader status
-- [ ] TASK-TEST-002 - Write integration tests with multi-node Docker Compose
+- [ ] TASK-TEST-002 - Write integration tests with multi-node Docker Compose (infrastructure created, see DJANGO-011)
 
 **Outcome:** Automatic leader election and failover with 3-node quorum support, eliminating manual intervention for high availability.
 

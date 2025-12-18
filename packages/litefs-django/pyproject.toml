@@ -3,7 +3,10 @@ name = "litefs-django"
 version = "0.1.2"
 description = "Django adapter for LiteFS SQLite replication"
 requires-python = ">=3.10"
-dependencies = ["litefs-py>=0.1.2", "django>=5.0,<6.0"]
+dependencies = [
+    "litefs-py>=0.1.2",
+    "django>=5.0,<6.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -24,6 +27,9 @@ markers = [
     "property: Property-based tests",
     "concurrency: Concurrency tests",
 ]
+
+[tool.uv.sources]
+litefs-py = { path = "../litefs", editable = true }
 
 [dependency-groups]
 dev = ["pytest>=9.0.2", "hypothesis>=6.0.0"]
