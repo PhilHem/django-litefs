@@ -21,7 +21,7 @@ Project is in initial development phase. Core architecture and framework adapter
 
 **Goal:** Deliver a minimal viable product with core LiteFS integration and Django adapter support.
 
-- [ ] TASK-CORE-001 - Implement `litefs-py` core: settings, config generation, primary detection
+- [x] TASK-CORE-001 - Implement `litefs-py` core: settings, config generation, primary detection
 - [ ] TASK-DJANGO-001 - Implement `litefs-django` adapter: settings reader, DB backend
 - [ ] TASK-RAFT-001 - Implement static leader election (manual failover, 2-node minimum)
 - [ ] TASK-CMD-001 - Create management commands (status, check)
