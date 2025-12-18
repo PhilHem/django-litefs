@@ -250,3 +250,86 @@ class TestConfigRoundTrip:
         assert parsed_settings.database_name == settings.database_name
         assert parsed_settings.leader_election == settings.leader_election
         assert parsed_settings.proxy_addr == settings.proxy_addr
+
+
+@pytest.mark.unit
+@pytest.mark.property
+class TestYAMLGenerationPBT:
+    """Property-based tests for YAML generation validity."""
+
+    @given(
+        database_name=st.text(min_size=1, max_size=100),
+        proxy_addr=st.text(max_size=200),
+    )
+    def test_generated_yaml_is_valid(self, database_name, proxy_addr):
+        """PBT: Generated YAML is always valid and parseable."""
+        settings = LiteFSSettings(
+            mount_path="/litefs",
+            data_path="/var/lib/litefs",
+            database_name=database_name,
+            leader_election="static",
+            proxy_addr=proxy_addr,
+            enabled=True,
+            retention="1h",
+        )
+
+        generator = ConfigGenerator()
+        yaml_str = generator.generate(settings)
+
+        # Should be parseable YAML
+        parsed = yaml.safe_load(yaml_str)
+        assert parsed is not None
+
+        # Should contain expected structure
+        assert "databases" in parsed
+        assert len(parsed["databases"]) == 1
+        assert parsed["databases"][0]["path"] == database_name
+        assert parsed["proxy"]["addr"] == proxy_addr
+
+    @given(value=st.text(max_size=100))
+    def test_yaml_special_chars_handled(self, value):
+        """PBT: YAML special chars (@*&!|>) produce valid output."""
+        # Use value in database_name and proxy_addr
+        settings = LiteFSSettings(
+            mount_path="/litefs",
+            data_path="/var/lib/litefs",
+            database_name=value if value else "db.sqlite3",
+            leader_election="static",
+            proxy_addr=value if value else ":8080",
+            enabled=True,
+            retention="1h",
+        )
+
+        generator = ConfigGenerator()
+        yaml_str = generator.generate(settings)
+
+        # Should be parseable YAML regardless of special chars
+        parsed = yaml.safe_load(yaml_str)
+        assert parsed is not None
+
+
+@pytest.mark.unit
+class TestConfigDeterminism:
+    """Tests for config output determinism."""
+
+    def test_generate_produces_identical_output_for_same_input(self):
+        """Same settings always produce byte-identical YAML."""
+        settings = LiteFSSettings(
+            mount_path="/litefs",
+            data_path="/var/lib/litefs",
+            database_name="db.sqlite3",
+            leader_election="static",
+            proxy_addr=":8080",
+            enabled=True,
+            retention="1h",
+        )
+
+        generator = ConfigGenerator()
+
+        # Generate multiple times
+        yaml1 = generator.generate(settings)
+        yaml2 = generator.generate(settings)
+        yaml3 = generator.generate(settings)
+
+        # All outputs should be byte-identical
+        assert yaml1 == yaml2 == yaml3

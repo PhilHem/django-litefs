@@ -35,6 +35,11 @@ class LiteFSSettings:
             ("mount_path", self.mount_path),
             ("data_path", self.data_path),
         ]:
+            # Check for null bytes first (security issue)
+            if "\x00" in path_value:
+                raise LiteFSConfigError(
+                    f"{path_name} contains null byte, got: {path_value!r}"
+                )
             path = Path(path_value)
             # Check for path traversal first (even in relative paths)
             if ".." in path.parts:
