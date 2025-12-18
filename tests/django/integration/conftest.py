@@ -1,6 +1,9 @@
 """Pytest fixtures for Django LiteFS integration tests."""
 
 import os
+import platform
+import subprocess
+
 import pytest
 
 
@@ -11,19 +14,47 @@ def pytest_configure(config):
     )
 
 
+def _check_fuse_available():
+    """Check if FUSE is available on the current platform.
+
+    Returns:
+        True if FUSE is available or on non-POSIX systems (fallback).
+    """
+    if os.name != "posix":
+        # Non-POSIX systems (Windows) - assume FUSE available via fallback
+        return True
+
+    # POSIX systems - check platform-specific FUSE paths
+    if platform.system() == "Darwin":
+        # macOS uses osxfuse or macfuse
+        return os.path.exists("/dev/osxfuse") or os.path.exists("/dev/macfuse")
+    else:
+        # Linux and other POSIX systems use /dev/fuse
+        return os.path.exists("/dev/fuse")
+
+
 @pytest.fixture
 def litefs_available():
     """Check if LiteFS/FUSE is available for integration tests.
 
     Returns True if LiteFS infrastructure is available, False otherwise.
     Integration tests should skip if this returns False.
-    """
-    # Check for Docker availability
-    docker_available = os.system("docker --version > /dev/null 2>&1") == 0
 
-    # Check for FUSE availability (simplified check)
-    # In a real implementation, this would check for FUSE support
-    fuse_available = os.path.exists("/dev/fuse") or os.name != "posix"
+    Thread-safe implementation using subprocess.run instead of os.system.
+    """
+    # Check for Docker availability (thread-safe)
+    try:
+        result = subprocess.run(
+            ["docker", "--version"],
+            capture_output=True,
+            timeout=5,
+        )
+        docker_available = result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        docker_available = False
+
+    # Check for FUSE availability (cross-platform)
+    fuse_available = _check_fuse_available()
 
     return docker_available and fuse_available
 

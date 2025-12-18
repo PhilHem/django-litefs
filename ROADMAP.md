@@ -40,7 +40,7 @@ Project is in initial development phase. Core architecture and framework adapter
 - [ ] TASK-CORE-002 - Integrate `py-leader` into `litefs-py` as optional dependency
 - [ ] TASK-RAFT-003 - Implement automatic failover (3-node quorum)
 - [ ] TASK-HEALTH-001 - Add health checks with leader status
-- [ ] TASK-TEST-002 - Write integration tests with multi-node Docker Compose (infrastructure created, see DJANGO-011)
+- [ ] TASK-TEST-002 - Write integration tests with multi-node Docker Compose (infrastructure created, see DJANGO-011; infrastructure improvements: INTEG-001, INTEG-002, INTEG-004; multi-node tests deferred: INTEG-003)
 
 **Outcome:** Automatic leader election and failover with 3-node quorum support, eliminating manual intervention for high availability.
 
