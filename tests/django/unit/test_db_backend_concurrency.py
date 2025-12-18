@@ -742,3 +742,237 @@ class TestDatabaseBackendConcurrency:
                 or "read-only" in error_message.lower()
                 or "read only" in error_message.lower()
             ), f"Error message should indicate readonly: {error_message}"
+
+    def test_concurrent_connection_init_mount_path_missing(self, tmp_path):
+        """Test concurrent connection initialization when mount_path doesn't exist (DJANGO-005, DJANGO-025, DJANGO-026).
+
+        Multiple threads calling get_new_connection when mount_path doesn't exist should fail
+        consistently with predictable error types. Verifies error handling and error type consistency.
+        """
+        from litefs_django.db.backends.litefs.base import DatabaseWrapper
+        from litefs.usecases.primary_detector import LiteFSNotRunningError
+
+        # Use non-existent mount_path
+        mount_path = tmp_path / "nonexistent_litefs"
+
+        settings_dict = {
+            "ENGINE": "litefs_django.db.backends.litefs",
+            "NAME": "test.db",
+            "OPTIONS": {
+                "litefs_mount_path": str(mount_path),
+            },
+        }
+
+        wrapper = DatabaseWrapper(settings_dict)
+
+        results = []
+        errors = []
+        error_types = []
+        lock = threading.Lock()
+
+        def attempt_connection(thread_id):
+            """Thread function to attempt connection initialization."""
+            try:
+                # This should fail because mount_path doesn't exist
+                wrapper.get_new_connection({})
+                with lock:
+                    errors.append(
+                        f"Thread {thread_id}: Connection succeeded unexpectedly"
+                    )
+            except LiteFSNotRunningError as e:
+                # Expected: mount_path doesn't exist (DJANGO-025, DJANGO-026)
+                error_type = type(e).__name__
+                with lock:
+                    errors.append(f"Thread {thread_id}: {error_type}: {str(e)}")
+                    error_types.append(error_type)
+                    results.append(thread_id)
+            except Exception as e:
+                # Unexpected error type (DJANGO-026)
+                error_type = type(e).__name__
+                with lock:
+                    errors.append(
+                        f"Thread {thread_id}: Unexpected {error_type}: {str(e)}"
+                    )
+                    error_types.append(error_type)
+                    results.append(thread_id)
+
+        # Start multiple threads attempting connections
+        threads = []
+        for i in range(20):
+            t = threading.Thread(target=attempt_connection, args=(i,))
+            threads.append(t)
+            t.start()
+
+        # Wait for all threads
+        for t in threads:
+            t.join(timeout=10.0)
+
+        # Verify all threads attempted connection
+        assert len(results) == 20, f"Not all threads completed: {len(results)}/20"
+
+        # Verify error types are consistent (DJANGO-026)
+        # All threads should get LiteFSNotRunningError
+        unique_error_types = set(error_types)
+        assert len(unique_error_types) == 1, (
+            f"Expected single error type (LiteFSNotRunningError), got: {unique_error_types}. "
+            f"Error handling should be consistent (DJANGO-026)."
+        )
+        assert "LiteFSNotRunningError" in unique_error_types, (
+            f"Expected LiteFSNotRunningError, got: {unique_error_types}"
+        )
+
+        # Verify errors occurred (mount_path doesn't exist)
+        assert len(errors) == 20, f"Expected 20 errors, got {len(errors)}"
+
+    def test_mount_path_appears_during_connection_attempts(self, tmp_path):
+        """Test race condition when mount_path appears during concurrent connection attempts (DJANGO-024).
+
+        When mount_path appears during concurrent connection attempts, threads should handle it
+        gracefully without database file creation races.
+        """
+        from litefs_django.db.backends.litefs.base import DatabaseWrapper
+        from litefs.usecases.primary_detector import LiteFSNotRunningError
+
+        mount_path = tmp_path / "litefs"
+        db_path = mount_path / "test.db"
+
+        settings_dict = {
+            "ENGINE": "litefs_django.db.backends.litefs",
+            "NAME": "test.db",
+            "OPTIONS": {
+                "litefs_mount_path": str(mount_path),
+            },
+        }
+
+        wrapper = DatabaseWrapper(settings_dict)
+
+        results = []
+        errors = []
+        lock = threading.Lock()
+        mount_path_created = threading.Event()
+
+        def attempt_connection(thread_id):
+            """Thread function to attempt connection initialization."""
+            try:
+                # Wait a bit to allow mount_path creation
+                time.sleep(0.05)
+                # Attempt connection
+                # May fail if mount_path doesn't exist yet, or succeed if it does
+                conn = wrapper.get_new_connection({})
+                conn.close()
+                with lock:
+                    results.append(thread_id)
+            except LiteFSNotRunningError:
+                # Expected if mount_path doesn't exist yet (race condition)
+                # Thread should handle gracefully
+                with lock:
+                    errors.append(f"Thread {thread_id}: Mount path not ready")
+            except Exception as e:
+                # Other errors should be handled gracefully
+                with lock:
+                    errors.append(f"Thread {thread_id}: {e}")
+
+        def create_mount_path():
+            """Thread function to create mount_path after delay."""
+            time.sleep(0.1)  # Delay before creating mount_path
+            mount_path.mkdir()
+            mount_path_created.set()
+
+        # Start threads attempting connections (mount_path doesn't exist yet)
+        threads = []
+        for i in range(10):
+            t = threading.Thread(target=attempt_connection, args=(i,))
+            threads.append(t)
+            t.start()
+
+        # Start thread to create mount_path
+        create_thread = threading.Thread(target=create_mount_path)
+        create_thread.start()
+
+        # Wait for all threads
+        for t in threads:
+            t.join(timeout=15.0)
+        create_thread.join(timeout=15.0)
+
+        # Verify mount_path was created
+        assert mount_path.exists(), "Mount path should have been created"
+
+        # Verify no race conditions in database file creation
+        # All threads should either succeed or fail gracefully
+        # Check that database file exists only once (no race conditions)
+        if db_path.exists():
+            # Database file should exist only once
+            assert db_path.is_file(), "Database should be a file, not directory"
+
+        # Verify threads completed (either succeeded or failed gracefully)
+        assert len(results) + len(errors) == 10, (
+            f"Not all threads completed: {len(results)} succeeded, {len(errors)} failed"
+        )
+
+    def test_primary_detector_created_before_mount_path_check(self, tmp_path):
+        """Test that PrimaryDetector creation validates mount_path exists (fail-fast) (DJANGO-027).
+
+        PrimaryDetector creation in __init__ should validate mount_path exists before proceeding.
+        This ensures fail-fast behavior.
+        """
+        from litefs_django.db.backends.litefs.base import DatabaseWrapper
+        from litefs.usecases.primary_detector import LiteFSNotRunningError
+
+        # Use non-existent mount_path
+        mount_path = tmp_path / "nonexistent_litefs"
+
+        settings_dict = {
+            "ENGINE": "litefs_django.db.backends.litefs",
+            "NAME": "test.db",
+            "OPTIONS": {
+                "litefs_mount_path": str(mount_path),
+            },
+        }
+
+        # DatabaseWrapper.__init__ should validate mount_path exists (fail-fast)
+        # This test verifies that validation happens early in __init__
+        with pytest.raises(LiteFSNotRunningError) as exc_info:
+            wrapper = DatabaseWrapper(settings_dict)
+
+        # Verify error message mentions mount path
+        assert (
+            "mount path" in str(exc_info.value).lower()
+            or "does not exist" in str(exc_info.value).lower()
+        ), f"Error message should mention mount path: {exc_info.value}"
+
+    def test_get_new_connection_error_handling_missing_path(self, tmp_path):
+        """Test error handling in get_new_connection when mount_path is missing (DJANGO-025).
+
+        get_new_connection should handle missing mount_path gracefully with clear error.
+        """
+        from litefs_django.db.backends.litefs.base import DatabaseWrapper
+        from litefs.usecases.primary_detector import LiteFSNotRunningError
+
+        # Use non-existent mount_path
+        mount_path = tmp_path / "nonexistent_litefs"
+
+        settings_dict = {
+            "ENGINE": "litefs_django.db.backends.litefs",
+            "NAME": "test.db",
+            "OPTIONS": {
+                "litefs_mount_path": str(mount_path),
+            },
+        }
+
+        # DatabaseWrapper.__init__ should fail-fast when mount_path doesn't exist
+        # So we need to create it first, then delete it to test get_new_connection
+        mount_path.mkdir()
+        wrapper = DatabaseWrapper(settings_dict)
+        mount_path.rmdir()  # Remove mount_path after wrapper creation
+
+        # get_new_connection should fail with clear error when mount_path doesn't exist (DJANGO-025)
+        with pytest.raises(LiteFSNotRunningError) as exc_info:
+            wrapper.get_new_connection({})
+
+        # Verify error message is clear and helpful
+        error_message = str(exc_info.value).lower()
+        assert (
+            "mount path" in error_message
+            or "does not exist" in error_message
+            or "not running" in error_message
+        ), f"Error message should clearly indicate mount path issue: {exc_info.value}"

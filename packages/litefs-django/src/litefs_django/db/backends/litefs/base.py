@@ -7,7 +7,7 @@ from django.db.backends.sqlite3.base import (
     Cursor as SQLite3Cursor,
 )
 
-from litefs.usecases.primary_detector import PrimaryDetector
+from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningError
 from litefs_django.exceptions import NotPrimaryError
 
 
@@ -132,10 +132,18 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
         if not mount_path:
             raise ValueError("litefs_mount_path must be provided in OPTIONS")
 
+        # Validate mount_path exists (fail-fast) (DJANGO-027)
+        mount_path_obj = Path(mount_path)
+        if not mount_path_obj.exists():
+            raise LiteFSNotRunningError(
+                f"LiteFS mount path does not exist: {mount_path}. "
+                "LiteFS may not be running or mounted."
+            )
+
         # Update database path to be in mount_path
         original_name = settings_dict.get("NAME", "db.sqlite3")
         settings_dict = settings_dict.copy()
-        settings_dict["NAME"] = str(Path(mount_path) / original_name)
+        settings_dict["NAME"] = str(mount_path_obj / original_name)
 
         # Initialize parent SQLite3 backend
         super().__init__(
@@ -143,11 +151,25 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
         )
 
         # Create PrimaryDetector use case (Clean Architecture: delegate to use case)
+        # Mount path validation already done above (fail-fast)
         self._primary_detector = PrimaryDetector(mount_path)
         self._mount_path = mount_path
 
     def get_new_connection(self, conn_params):
-        """Create new database connection with IMMEDIATE transaction mode."""
+        """Create new database connection with IMMEDIATE transaction mode.
+
+        Raises:
+            LiteFSNotRunningError: If mount_path doesn't exist (DJANGO-025)
+        """
+        # Validate mount_path exists before attempting connection (DJANGO-025)
+        # This provides clear error handling and prevents inconsistent error types
+        mount_path_obj = Path(self._mount_path)
+        if not mount_path_obj.exists():
+            raise LiteFSNotRunningError(
+                f"LiteFS mount path does not exist: {self._mount_path}. "
+                "Cannot create database connection. LiteFS may not be running or mounted."
+            )
+
         # Set transaction mode to IMMEDIATE for better lock handling
         conn_params.setdefault("isolation_level", None)
         connection = super().get_new_connection(conn_params)

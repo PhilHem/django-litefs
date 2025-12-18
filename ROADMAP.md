@@ -25,7 +25,7 @@ Project is in initial development phase. Core architecture and framework adapter
 - [x] TASK-DJANGO-001 - Implement `litefs-django` adapter: settings reader, DB backend (fixes DJANGO-001, DJANGO-002, DJANGO-006, DJANGO-007, DJANGO-008, DJANGO-009, DJANGO-014, DJANGO-020, DJANGO-021, DJANGO-022; noted DJANGO-003)
 - [ ] TASK-RAFT-001 - Implement static leader election (manual failover, 2-node minimum)
 - [ ] TASK-CMD-001 - Create management commands (status, check)
-- [x] TASK-TEST-001 - Write unit tests with in-memory adapters (concurrency tests added: Django backend - DJANGO-012, DJANGO-015, DJANGO-016, DJANGO-017, DJANGO-018, DJANGO-019, DJANGO-004, DJANGO-023; PrimaryDetector - CORE-002, CORE-013, CORE-014; property-based tests added: path sanitization - CORE-003-PBT, YAML generation - CORE-004, config determinism - CORE-010)
+- [x] TASK-TEST-001 - Write unit tests with in-memory adapters (concurrency tests added: Django backend - DJANGO-012, DJANGO-015, DJANGO-016, DJANGO-017, DJANGO-018, DJANGO-019, DJANGO-004, DJANGO-023, DJANGO-005, DJANGO-024, DJANGO-025, DJANGO-026, DJANGO-027; PrimaryDetector - CORE-002, CORE-013, CORE-014; property-based tests added: path sanitization - CORE-003-PBT, YAML generation - CORE-004, config determinism - CORE-010)
 - [ ] TASK-EXAM-001 - Create example Django app in `examples/django-app/`
 
 **Outcome:** A working Django application with LiteFS replication support, manual failover capability, and basic management tooling.
