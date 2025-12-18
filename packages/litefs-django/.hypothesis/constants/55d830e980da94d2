@@ -1,0 +1,4 @@
+# file: /Users/philipphematty/Projects/django-litefs/packages/litefs-django/src/litefs_django/settings.py
+# hypothesis_version: 6.148.7
+
+['DATABASE_NAME', 'DATA_PATH', 'ENABLED', 'LEADER_ELECTION', 'MOUNT_PATH', 'PROXY_ADDR', 'RAFT_PEERS', 'RAFT_SELF_ADDR', 'RETENTION', 'data_path', 'database_name', 'enabled', 'leader_election', 'mount_path', 'proxy_addr', 'raft_peers', 'raft_self_addr', 'retention']

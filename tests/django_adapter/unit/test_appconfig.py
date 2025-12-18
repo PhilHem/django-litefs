@@ -8,6 +8,7 @@ import pytest
 from django.apps import AppConfig
 from django.core.exceptions import ImproperlyConfigured
 
+import litefs_django
 from litefs_django.apps import LiteFSDjangoConfig
 
 
@@ -17,7 +18,7 @@ class TestAppConfig:
 
     def test_appconfig_initialization(self):
         """Test that AppConfig can be initialized."""
-        config = LiteFSDjangoConfig("litefs_django", None)
+        config = LiteFSDjangoConfig("litefs_django", litefs_django)
         assert config.name == "litefs_django"
 
     def test_ready_validates_settings(self):
@@ -26,10 +27,10 @@ class TestAppConfig:
             mount_path = Path(tmpdir) / "litefs"
             mount_path.mkdir()
 
-            config = LiteFSDjangoConfig("litefs_django", None)
+            config = LiteFSDjangoConfig("litefs_django", litefs_django)
 
             # Mock Django settings
-            with patch("litefs_django.apps.settings") as mock_settings:
+            with patch("litefs_django.apps.django_settings") as mock_settings:
                 mock_settings.LITEFS = {
                     "MOUNT_PATH": str(mount_path),
                     "DATA_PATH": "/var/lib/litefs",
@@ -49,9 +50,9 @@ class TestAppConfig:
             mount_path = Path(tmpdir) / "nonexistent"
             # Path doesn't exist
 
-            config = LiteFSDjangoConfig("litefs_django", None)
+            config = LiteFSDjangoConfig("litefs_django", litefs_django)
 
-            with patch("litefs_django.apps.settings") as mock_settings:
+            with patch("litefs_django.apps.django_settings") as mock_settings:
                 mock_settings.LITEFS = {
                     "MOUNT_PATH": str(mount_path),
                     "DATA_PATH": "/var/lib/litefs",

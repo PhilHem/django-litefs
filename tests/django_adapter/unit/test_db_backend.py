@@ -8,6 +8,7 @@ import pytest
 
 from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningError
 from litefs_django.db.backends.litefs.base import DatabaseWrapper
+from .conftest import create_litefs_settings_dict
 
 
 @pytest.mark.unit
@@ -29,7 +30,10 @@ class TestDatabaseBackend:
             }
 
             wrapper = DatabaseWrapper(settings_dict)
-            assert wrapper.settings_dict == settings_dict
+            # DatabaseWrapper modifies NAME to be absolute path in mount_path
+            expected_settings = settings_dict.copy()
+            expected_settings["NAME"] = str(mount_path / "test.db")
+            assert wrapper.settings_dict == expected_settings
 
     def test_uses_litefs_mount_path_for_database(self):
         """Test that database path uses LiteFS mount path."""
@@ -186,13 +190,7 @@ class TestDatabaseBackend:
             # Create primary file to allow writes
             (mount_path / ".primary").write_text("node-1")
 
-            settings_dict = {
-                "ENGINE": "litefs_django.db.backends.litefs",
-                "NAME": "test.db",
-                "OPTIONS": {
-                    "litefs_mount_path": str(mount_path),
-                },
-            }
+            settings_dict = create_litefs_settings_dict(mount_path, "test.db")
 
             wrapper = DatabaseWrapper(settings_dict)
             wrapper.ensure_connection()
@@ -225,13 +223,7 @@ class TestDatabaseBackend:
             mount_path.mkdir()
             (mount_path / "test.db").touch()
 
-            settings_dict = {
-                "ENGINE": "litefs_django.db.backends.litefs",
-                "NAME": "test.db",
-                "OPTIONS": {
-                    "litefs_mount_path": str(mount_path),
-                },
-            }
+            settings_dict = create_litefs_settings_dict(mount_path, "test.db")
 
             wrapper = DatabaseWrapper(settings_dict)
             wrapper.ensure_connection()

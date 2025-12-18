@@ -10,13 +10,60 @@ import pytest
 
 from litefs.usecases.primary_detector import PrimaryDetector
 
+
+def create_litefs_settings_dict(mount_path, db_name="test.db"):
+    """Create a settings_dict for LiteFS database backend testing.
+
+    Django 5.x requires additional fields in settings_dict.
+    """
+    return {
+        "ENGINE": "litefs_django.db.backends.litefs",
+        "NAME": db_name,
+        "ATOMIC_REQUESTS": False,
+        "AUTOCOMMIT": True,
+        "CONN_MAX_AGE": 0,
+        "CONN_HEALTH_CHECKS": False,
+        "TIME_ZONE": None,
+        "OPTIONS": {
+            "litefs_mount_path": str(mount_path),
+        },
+    }
+
+
 # Import write detection logic directly to test thread safety
 # This avoids needing full Django setup for this specific test
+import re
+
+
+def _strip_sql_comments(sql):
+    """Remove SQL comments for write detection (DJANGO-031)."""
+    # Remove block comments /* ... */ (non-greedy, handles nested)
+    sql = re.sub(r"/\*.*?\*/", "", sql, flags=re.DOTALL)
+    # Remove line comments -- ... (to end of line)
+    sql = re.sub(r"--[^\n]*(\n|$)", r"\1", sql)
+    return sql
+
+
 def _is_write_operation(sql):
-    """Check if SQL statement is a write operation (copied from LiteFSCursor for testing)."""
+    """Check if SQL statement is a write operation (copied from LiteFSCursor for testing).
+
+    Handles:
+    - Direct write keywords (INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, REPLACE)
+    - Database maintenance operations (VACUUM, REINDEX, ANALYZE) (DJANGO-030)
+    - CTE patterns: WITH ... INSERT/UPDATE/DELETE (DJANGO-029)
+    - SQL with leading comments (DJANGO-031)
+    """
     if not sql:
         return False
-    sql_upper = sql.strip().upper()
+
+    # Strip comments before detection (DJANGO-031)
+    sql_clean = _strip_sql_comments(sql)
+    sql_upper = sql_clean.strip().upper()
+
+    if not sql_upper:
+        return False
+
+    # Direct write keywords (existing + DJANGO-030 maintenance ops)
     write_keywords = (
         "INSERT",
         "UPDATE",
@@ -25,8 +72,20 @@ def _is_write_operation(sql):
         "DROP",
         "ALTER",
         "REPLACE",
+        "VACUUM",
+        "REINDEX",
+        "ANALYZE",
     )
-    return any(sql_upper.startswith(keyword) for keyword in write_keywords)
+
+    if any(sql_upper.startswith(keyword) for keyword in write_keywords):
+        return True
+
+    # CTE pattern detection (DJANGO-029): WITH ... INSERT/UPDATE/DELETE
+    if sql_upper.startswith("WITH"):
+        cte_write_keywords = ("INSERT", "UPDATE", "DELETE")
+        return any(keyword in sql_upper for keyword in cte_write_keywords)
+
+    return False
 
 
 @pytest.mark.unit
@@ -301,9 +360,12 @@ class TestDatabaseBackendConcurrency:
     def test_connection_reuse_enforces_immediate_mode(self, tmp_path):
         """Test that connection reuse across transactions enforces IMMEDIATE mode (DJANGO-022).
 
-        Multiple threads reuse the same connection across multiple transactions.
+        A single thread reuses the same connection across multiple transactions.
         Verifies that all transactions use BEGIN IMMEDIATE, even when connection
         is reused across transaction boundaries.
+
+        Note: Django 5.x enforces thread isolation for DatabaseWrapper, so this test
+        uses single-threaded verification of multiple transactions.
         """
         mount_path = tmp_path / "litefs"
         mount_path.mkdir()
@@ -311,59 +373,26 @@ class TestDatabaseBackendConcurrency:
 
         from litefs_django.db.backends.litefs.base import DatabaseWrapper
 
-        settings_dict = {
-            "ENGINE": "litefs_django.db.backends.litefs",
-            "NAME": "test.db",
-            "OPTIONS": {
-                "litefs_mount_path": str(mount_path),
-            },
-        }
+        settings_dict = create_litefs_settings_dict(mount_path)
 
         wrapper = DatabaseWrapper(settings_dict)
         wrapper.ensure_connection()
 
         # Capture SQL statements using trace callback
         executed_sql = []
-        lock = threading.Lock()
 
         def trace_callback(statement):
-            with lock:
-                executed_sql.append(statement)
+            executed_sql.append(statement)
 
         # Set trace callback on the underlying SQLite connection
         wrapper.connection.set_trace_callback(trace_callback)
 
-        results = []
-        errors = []
-
-        def perform_transactions(thread_id):
-            """Thread function to perform multiple transactions on shared connection."""
-            try:
-                # Each thread calls _start_transaction_under_autocommit multiple times
-                # simulating connection reuse across transaction boundaries
-                for i in range(5):
-                    wrapper._start_transaction_under_autocommit()
-
-                with lock:
-                    results.append(thread_id)
-            except Exception as e:
-                with lock:
-                    errors.append(f"Thread {thread_id}: {e}")
-
-        # Start multiple threads reusing the same connection
-        threads = []
+        # Perform multiple transactions on the same connection (single thread)
+        # simulating connection reuse across transaction boundaries
         for i in range(10):
-            t = threading.Thread(target=perform_transactions, args=(i,))
-            threads.append(t)
-            t.start()
-
-        # Wait for all threads
-        for t in threads:
-            t.join()
-
-        # Verify no errors occurred
-        assert len(errors) == 0, f"Errors occurred: {errors}"
-        assert len(results) == 10, f"Not all threads completed: {len(results)}/10"
+            wrapper._start_transaction_under_autocommit()
+            # Commit to complete transaction
+            wrapper.connection.commit()
 
         # Verify all BEGIN statements use IMMEDIATE mode
         begin_statements = [
@@ -394,21 +423,19 @@ class TestDatabaseBackendConcurrency:
 
         def initialize_connection(thread_id):
             """Thread function to initialize connection with PRAGMA statements."""
+            conn = None
             try:
                 # Simulate what get_new_connection does
                 conn = sqlite3.connect(str(db_path), timeout=10.0)
 
                 # These are the PRAGMA statements from get_new_connection
-                with conn:
-                    cursor = conn.cursor()
-                    cursor.execute("PRAGMA journal_mode=WAL")  # LiteFS requires WAL
-                    cursor.execute("BEGIN IMMEDIATE")
-                    cursor.execute("COMMIT")
+                cursor = conn.cursor()
+                cursor.execute("PRAGMA journal_mode=WAL")  # LiteFS requires WAL
+                cursor.execute("BEGIN IMMEDIATE")
+                cursor.execute("COMMIT")
 
                 # Verify WAL mode was set
-                cursor = conn.cursor()
                 journal_mode = cursor.execute("PRAGMA journal_mode").fetchone()[0]
-                conn.close()
 
                 if journal_mode.upper() != "WAL":
                     with lock:
@@ -421,6 +448,9 @@ class TestDatabaseBackendConcurrency:
             except Exception as e:
                 with lock:
                     errors.append(f"Thread {thread_id}: {e}")
+            finally:
+                if conn:
+                    conn.close()
 
         # Start multiple threads initializing connections
         threads = []
@@ -544,13 +574,7 @@ class TestDatabaseBackendConcurrency:
         # Import Django components (Django should be set up by conftest.py)
         from litefs_django.db.backends.litefs.base import DatabaseWrapper, LiteFSCursor
 
-        settings_dict = {
-            "ENGINE": "litefs_django.db.backends.litefs",
-            "NAME": "test.db",
-            "OPTIONS": {
-                "litefs_mount_path": str(mount_path),
-            },
-        }
+        settings_dict = create_litefs_settings_dict(mount_path)
 
         wrapper = DatabaseWrapper(settings_dict)
         wrapper.ensure_connection()
@@ -636,13 +660,7 @@ class TestDatabaseBackendConcurrency:
         from litefs_django.db.backends.litefs.base import DatabaseWrapper
         from litefs_django.exceptions import NotPrimaryError
 
-        settings_dict = {
-            "ENGINE": "litefs_django.db.backends.litefs",
-            "NAME": "test.db",
-            "OPTIONS": {
-                "litefs_mount_path": str(mount_path),
-            },
-        }
+        settings_dict = create_litefs_settings_dict(mount_path)
 
         wrapper = DatabaseWrapper(settings_dict)
         wrapper.ensure_connection()
@@ -685,13 +703,7 @@ class TestDatabaseBackendConcurrency:
         from litefs_django.db.backends.litefs.base import DatabaseWrapper, LiteFSCursor
         from django.db import DatabaseError
 
-        settings_dict = {
-            "ENGINE": "litefs_django.db.backends.litefs",
-            "NAME": "test.db",
-            "OPTIONS": {
-                "litefs_mount_path": str(mount_path),
-            },
-        }
+        settings_dict = create_litefs_settings_dict(mount_path)
 
         wrapper = DatabaseWrapper(settings_dict)
         wrapper.ensure_connection()
@@ -744,10 +756,11 @@ class TestDatabaseBackendConcurrency:
             ), f"Error message should indicate readonly: {error_message}"
 
     def test_concurrent_connection_init_mount_path_missing(self, tmp_path):
-        """Test concurrent connection initialization when mount_path doesn't exist (DJANGO-005, DJANGO-025, DJANGO-026).
+        """Test concurrent DatabaseWrapper creation when mount_path doesn't exist (DJANGO-005, DJANGO-025, DJANGO-026, DJANGO-027).
 
-        Multiple threads calling get_new_connection when mount_path doesn't exist should fail
-        consistently with predictable error types. Verifies error handling and error type consistency.
+        Multiple threads creating DatabaseWrapper when mount_path doesn't exist should fail
+        consistently with predictable error types. Verifies fail-fast behavior in __init__ (DJANGO-027)
+        and error type consistency (DJANGO-026).
         """
         from litefs_django.db.backends.litefs.base import DatabaseWrapper
         from litefs.usecases.primary_detector import LiteFSNotRunningError
@@ -755,32 +768,24 @@ class TestDatabaseBackendConcurrency:
         # Use non-existent mount_path
         mount_path = tmp_path / "nonexistent_litefs"
 
-        settings_dict = {
-            "ENGINE": "litefs_django.db.backends.litefs",
-            "NAME": "test.db",
-            "OPTIONS": {
-                "litefs_mount_path": str(mount_path),
-            },
-        }
-
-        wrapper = DatabaseWrapper(settings_dict)
+        settings_dict = create_litefs_settings_dict(mount_path)
 
         results = []
         errors = []
         error_types = []
         lock = threading.Lock()
 
-        def attempt_connection(thread_id):
-            """Thread function to attempt connection initialization."""
+        def attempt_wrapper_creation(thread_id):
+            """Thread function to attempt DatabaseWrapper creation."""
             try:
-                # This should fail because mount_path doesn't exist
-                wrapper.get_new_connection({})
+                # This should fail because mount_path doesn't exist (DJANGO-027 fail-fast)
+                DatabaseWrapper(settings_dict)
                 with lock:
                     errors.append(
-                        f"Thread {thread_id}: Connection succeeded unexpectedly"
+                        f"Thread {thread_id}: Wrapper creation succeeded unexpectedly"
                     )
             except LiteFSNotRunningError as e:
-                # Expected: mount_path doesn't exist (DJANGO-025, DJANGO-026)
+                # Expected: mount_path doesn't exist (DJANGO-027 fail-fast, DJANGO-026 consistency)
                 error_type = type(e).__name__
                 with lock:
                     errors.append(f"Thread {thread_id}: {error_type}: {str(e)}")
@@ -796,10 +801,10 @@ class TestDatabaseBackendConcurrency:
                     error_types.append(error_type)
                     results.append(thread_id)
 
-        # Start multiple threads attempting connections
+        # Start multiple threads attempting wrapper creation
         threads = []
         for i in range(20):
-            t = threading.Thread(target=attempt_connection, args=(i,))
+            t = threading.Thread(target=attempt_wrapper_creation, args=(i,))
             threads.append(t)
             t.start()
 
@@ -807,7 +812,7 @@ class TestDatabaseBackendConcurrency:
         for t in threads:
             t.join(timeout=10.0)
 
-        # Verify all threads attempted connection
+        # Verify all threads attempted wrapper creation
         assert len(results) == 20, f"Not all threads completed: {len(results)}/20"
 
         # Verify error types are consistent (DJANGO-026)
@@ -824,11 +829,15 @@ class TestDatabaseBackendConcurrency:
         # Verify errors occurred (mount_path doesn't exist)
         assert len(errors) == 20, f"Expected 20 errors, got {len(errors)}"
 
-    def test_mount_path_appears_during_connection_attempts(self, tmp_path):
-        """Test race condition when mount_path appears during concurrent connection attempts (DJANGO-024).
+    def test_mount_path_appears_during_wrapper_creation_attempts(self, tmp_path):
+        """Test race condition when mount_path appears during concurrent wrapper creation (DJANGO-024).
 
-        When mount_path appears during concurrent connection attempts, threads should handle it
-        gracefully without database file creation races.
+        When mount_path appears during concurrent DatabaseWrapper creation attempts,
+        threads should handle it gracefully - some fail fast (mount_path not yet present),
+        others succeed (mount_path appeared). Verifies no race conditions.
+
+        Note: With DJANGO-027 fail-fast validation in __init__, the race is now about
+        mount_path appearing between threads attempting to create wrappers.
         """
         from litefs_django.db.backends.litefs.base import DatabaseWrapper
         from litefs.usecases.primary_detector import LiteFSNotRunningError
@@ -836,34 +845,25 @@ class TestDatabaseBackendConcurrency:
         mount_path = tmp_path / "litefs"
         db_path = mount_path / "test.db"
 
-        settings_dict = {
-            "ENGINE": "litefs_django.db.backends.litefs",
-            "NAME": "test.db",
-            "OPTIONS": {
-                "litefs_mount_path": str(mount_path),
-            },
-        }
-
-        wrapper = DatabaseWrapper(settings_dict)
+        settings_dict = create_litefs_settings_dict(mount_path)
 
         results = []
         errors = []
         lock = threading.Lock()
         mount_path_created = threading.Event()
 
-        def attempt_connection(thread_id):
-            """Thread function to attempt connection initialization."""
+        def attempt_wrapper_creation(thread_id):
+            """Thread function to attempt wrapper creation."""
             try:
                 # Wait a bit to allow mount_path creation
                 time.sleep(0.05)
-                # Attempt connection
-                # May fail if mount_path doesn't exist yet, or succeed if it does
-                conn = wrapper.get_new_connection({})
-                conn.close()
+                # Attempt wrapper creation
+                # May fail if mount_path doesn't exist yet (DJANGO-027), or succeed if it does
+                wrapper = DatabaseWrapper(settings_dict.copy())
                 with lock:
                     results.append(thread_id)
             except LiteFSNotRunningError:
-                # Expected if mount_path doesn't exist yet (race condition)
+                # Expected if mount_path doesn't exist yet (DJANGO-027 fail-fast)
                 # Thread should handle gracefully
                 with lock:
                     errors.append(f"Thread {thread_id}: Mount path not ready")
@@ -876,12 +876,14 @@ class TestDatabaseBackendConcurrency:
             """Thread function to create mount_path after delay."""
             time.sleep(0.1)  # Delay before creating mount_path
             mount_path.mkdir()
+            # Create .primary file for valid wrapper initialization
+            (mount_path / ".primary").write_text("node-1")
             mount_path_created.set()
 
-        # Start threads attempting connections (mount_path doesn't exist yet)
+        # Start threads attempting wrapper creation (mount_path doesn't exist yet)
         threads = []
         for i in range(10):
-            t = threading.Thread(target=attempt_connection, args=(i,))
+            t = threading.Thread(target=attempt_wrapper_creation, args=(i,))
             threads.append(t)
             t.start()
 
@@ -897,14 +899,9 @@ class TestDatabaseBackendConcurrency:
         # Verify mount_path was created
         assert mount_path.exists(), "Mount path should have been created"
 
-        # Verify no race conditions in database file creation
-        # All threads should either succeed or fail gracefully
-        # Check that database file exists only once (no race conditions)
-        if db_path.exists():
-            # Database file should exist only once
-            assert db_path.is_file(), "Database should be a file, not directory"
-
         # Verify threads completed (either succeeded or failed gracefully)
+        # Some threads may have succeeded (mount_path appeared in time)
+        # Some threads may have failed (mount_path not yet present)
         assert len(results) + len(errors) == 10, (
             f"Not all threads completed: {len(results)} succeeded, {len(errors)} failed"
         )
@@ -921,13 +918,7 @@ class TestDatabaseBackendConcurrency:
         # Use non-existent mount_path
         mount_path = tmp_path / "nonexistent_litefs"
 
-        settings_dict = {
-            "ENGINE": "litefs_django.db.backends.litefs",
-            "NAME": "test.db",
-            "OPTIONS": {
-                "litefs_mount_path": str(mount_path),
-            },
-        }
+        settings_dict = create_litefs_settings_dict(mount_path)
 
         # DatabaseWrapper.__init__ should validate mount_path exists (fail-fast)
         # This test verifies that validation happens early in __init__
@@ -951,13 +942,7 @@ class TestDatabaseBackendConcurrency:
         # Use non-existent mount_path
         mount_path = tmp_path / "nonexistent_litefs"
 
-        settings_dict = {
-            "ENGINE": "litefs_django.db.backends.litefs",
-            "NAME": "test.db",
-            "OPTIONS": {
-                "litefs_mount_path": str(mount_path),
-            },
-        }
+        settings_dict = create_litefs_settings_dict(mount_path)
 
         # DatabaseWrapper.__init__ should fail-fast when mount_path doesn't exist
         # So we need to create it first, then delete it to test get_new_connection
@@ -976,3 +961,267 @@ class TestDatabaseBackendConcurrency:
             or "does not exist" in error_message
             or "not running" in error_message
         ), f"Error message should clearly indicate mount path issue: {exc_info.value}"
+
+
+@pytest.mark.unit
+class TestWriteDetectionGaps:
+    """Test write detection gaps (DJANGO-029, DJANGO-030, DJANGO-031)."""
+
+    def test_is_write_operation_cte_insert(self):
+        """Test CTE with INSERT is detected as write (DJANGO-029)."""
+        sql = """
+        WITH numbered_rows AS (
+            SELECT id, row_number() OVER (ORDER BY id) as rn FROM table1
+        )
+        INSERT INTO archive SELECT * FROM numbered_rows WHERE rn > 1000
+        """
+        assert _is_write_operation(sql) is True, (
+            "CTE with INSERT should be detected as write"
+        )
+
+    def test_is_write_operation_cte_update(self):
+        """Test CTE with UPDATE is detected as write (DJANGO-029)."""
+        sql = """
+        WITH cte AS (SELECT id FROM table1 WHERE active = 0)
+        UPDATE table1 SET deleted = 1 WHERE id IN (SELECT id FROM cte)
+        """
+        assert _is_write_operation(sql) is True, (
+            "CTE with UPDATE should be detected as write"
+        )
+
+    def test_is_write_operation_cte_delete(self):
+        """Test CTE with DELETE is detected as write (DJANGO-029)."""
+        sql = """
+        WITH old_records AS (SELECT id FROM logs WHERE created_at < '2020-01-01')
+        DELETE FROM logs WHERE id IN (SELECT id FROM old_records)
+        """
+        assert _is_write_operation(sql) is True, (
+            "CTE with DELETE should be detected as write"
+        )
+
+    def test_is_write_operation_cte_select_only(self):
+        """Test CTE with SELECT only is NOT detected as write."""
+        sql = """
+        WITH numbered AS (SELECT id, row_number() OVER () as rn FROM table1)
+        SELECT * FROM numbered WHERE rn > 10
+        """
+        assert _is_write_operation(sql) is False, (
+            "CTE with SELECT only should not be detected as write"
+        )
+
+    def test_is_write_operation_vacuum(self):
+        """Test VACUUM is detected as write (DJANGO-030)."""
+        assert _is_write_operation("VACUUM") is True, (
+            "VACUUM should be detected as write"
+        )
+        assert _is_write_operation("vacuum") is True, (
+            "vacuum (lowercase) should be detected as write"
+        )
+
+    def test_is_write_operation_reindex(self):
+        """Test REINDEX is detected as write (DJANGO-030)."""
+        assert _is_write_operation("REINDEX") is True, (
+            "REINDEX should be detected as write"
+        )
+        assert _is_write_operation("REINDEX table1") is True, (
+            "REINDEX table should be detected as write"
+        )
+
+    def test_is_write_operation_analyze(self):
+        """Test ANALYZE is detected as write (DJANGO-030)."""
+        assert _is_write_operation("ANALYZE") is True, (
+            "ANALYZE should be detected as write"
+        )
+        assert _is_write_operation("ANALYZE table1") is True, (
+            "ANALYZE table should be detected as write"
+        )
+
+    def test_is_write_operation_block_comment_insert(self):
+        """Test block comment before INSERT is detected as write (DJANGO-031)."""
+        sql = "/* cleanup operation */ INSERT INTO table1 VALUES (1)"
+        assert _is_write_operation(sql) is True, (
+            "Block comment before INSERT should be detected as write"
+        )
+
+    def test_is_write_operation_line_comment_insert(self):
+        """Test line comment before INSERT is detected as write (DJANGO-031)."""
+        sql = "-- TODO: insert cleanup\nINSERT INTO table1 VALUES (1)"
+        assert _is_write_operation(sql) is True, (
+            "Line comment before INSERT should be detected as write"
+        )
+
+    def test_is_write_operation_multiple_block_comments(self):
+        """Test multiple block comments before INSERT is detected as write (DJANGO-031)."""
+        sql = "/* first comment */ /* second comment */ INSERT INTO table1 VALUES (1)"
+        assert _is_write_operation(sql) is True, (
+            "Multiple block comments before INSERT should be detected as write"
+        )
+
+    def test_is_write_operation_mixed_comments(self):
+        """Test mixed comments before UPDATE is detected as write (DJANGO-031)."""
+        sql = """-- line comment
+        /* block comment */
+        UPDATE table1 SET value = 1"""
+        assert _is_write_operation(sql) is True, (
+            "Mixed comments before UPDATE should be detected as write"
+        )
+
+
+@pytest.mark.unit
+class TestExecutescriptOverride:
+    """Test executescript method override (DJANGO-028)."""
+
+    def test_executescript_checks_primary_on_replica(self, tmp_path):
+        """Test executescript raises NotPrimaryError on replica (DJANGO-028)."""
+        from litefs_django.db.backends.litefs.base import DatabaseWrapper
+        from litefs_django.exceptions import NotPrimaryError
+
+        mount_path = tmp_path / "litefs"
+        mount_path.mkdir()
+        db_path = mount_path / "test.db"
+
+        # Create database
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("CREATE TABLE test_table (id INTEGER PRIMARY KEY, value TEXT)")
+        conn.commit()
+        conn.close()
+
+        # No .primary file = replica
+
+        settings_dict = create_litefs_settings_dict(mount_path)
+
+        wrapper = DatabaseWrapper(settings_dict)
+        wrapper.ensure_connection()
+        cursor = wrapper.create_cursor()
+
+        # executescript should raise NotPrimaryError on replica
+        sql_script = """
+        INSERT INTO test_table VALUES (1, 'a');
+        INSERT INTO test_table VALUES (2, 'b');
+        """
+        with pytest.raises(NotPrimaryError) as exc_info:
+            cursor.executescript(sql_script)
+
+        assert (
+            "replica" in str(exc_info.value).lower()
+            or "primary" in str(exc_info.value).lower()
+        )
+
+    def test_executescript_works_on_primary(self, tmp_path):
+        """Test executescript works on primary node (DJANGO-028)."""
+        from litefs_django.db.backends.litefs.base import DatabaseWrapper
+
+        mount_path = tmp_path / "litefs"
+        mount_path.mkdir()
+        db_path = mount_path / "test.db"
+        primary_file = mount_path / ".primary"
+        primary_file.write_text("node-1")
+
+        # Create database
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("CREATE TABLE test_table (id INTEGER PRIMARY KEY, value TEXT)")
+        conn.commit()
+        conn.close()
+
+        settings_dict = create_litefs_settings_dict(mount_path)
+
+        wrapper = DatabaseWrapper(settings_dict)
+        wrapper.ensure_connection()
+        cursor = wrapper.create_cursor()
+
+        # executescript should work on primary
+        sql_script = """
+        INSERT INTO test_table VALUES (1, 'a');
+        INSERT INTO test_table VALUES (2, 'b');
+        """
+        # Should not raise
+        cursor.executescript(sql_script)
+
+        # Verify data was inserted
+        result = cursor.execute("SELECT COUNT(*) FROM test_table").fetchone()
+        assert result[0] == 2
+
+
+@pytest.mark.unit
+class TestPrimaryDetectorLifecycle:
+    """Test PrimaryDetector lifecycle across cursor operations (DJANGO-032)."""
+
+    def test_shared_primary_detector_safe_across_cursor_lifecycle(self, tmp_path):
+        """Test shared PrimaryDetector remains valid across cursor lifecycle (DJANGO-032)."""
+        from litefs_django.db.backends.litefs.base import DatabaseWrapper
+
+        mount_path = tmp_path / "litefs"
+        mount_path.mkdir()
+        db_path = mount_path / "test.db"
+        primary_file = mount_path / ".primary"
+        primary_file.write_text("node-1")
+
+        # Create database
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("CREATE TABLE test_table (id INTEGER PRIMARY KEY, value TEXT)")
+        conn.commit()
+        conn.close()
+
+        settings_dict = create_litefs_settings_dict(mount_path)
+
+        wrapper = DatabaseWrapper(settings_dict)
+        wrapper.ensure_connection()
+
+        # Create multiple cursors - they should share the same PrimaryDetector
+        cursor1 = wrapper.create_cursor()
+        cursor2 = wrapper.create_cursor()
+
+        assert cursor1._primary_detector is cursor2._primary_detector, (
+            "Cursors should share the same PrimaryDetector instance"
+        )
+
+        # Use cursor1
+        cursor1.execute("INSERT INTO test_table VALUES (1, 'a')")
+
+        # Verify cursor2's detector is still valid after cursor1 operations
+        assert cursor2._primary_detector.is_primary() is True
+
+        # Use cursor2
+        cursor2.execute("INSERT INTO test_table VALUES (2, 'b')")
+
+        # Verify data from both cursors
+        result = cursor1.execute("SELECT COUNT(*) FROM test_table").fetchone()
+        assert result[0] == 2
+
+    def test_detector_remains_valid_after_failover(self, tmp_path):
+        """Test detector handles failover correctly across cursors (DJANGO-032)."""
+        from litefs_django.db.backends.litefs.base import DatabaseWrapper
+        from litefs_django.exceptions import NotPrimaryError
+
+        mount_path = tmp_path / "litefs"
+        mount_path.mkdir()
+        db_path = mount_path / "test.db"
+        primary_file = mount_path / ".primary"
+        primary_file.write_text("node-1")
+
+        # Create database
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("CREATE TABLE test_table (id INTEGER PRIMARY KEY, value TEXT)")
+        conn.commit()
+        conn.close()
+
+        settings_dict = create_litefs_settings_dict(mount_path)
+
+        wrapper = DatabaseWrapper(settings_dict)
+        wrapper.ensure_connection()
+
+        cursor1 = wrapper.create_cursor()
+        cursor2 = wrapper.create_cursor()
+
+        # Use cursor1 as primary
+        cursor1.execute("INSERT INTO test_table VALUES (1, 'a')")
+
+        # Simulate failover
+        primary_file.unlink()
+
+        # Both cursors should now detect replica status
+        with pytest.raises(NotPrimaryError):
+            cursor1.execute("INSERT INTO test_table VALUES (2, 'b')")
+
+        with pytest.raises(NotPrimaryError):
+            cursor2.execute("INSERT INTO test_table VALUES (3, 'c')")

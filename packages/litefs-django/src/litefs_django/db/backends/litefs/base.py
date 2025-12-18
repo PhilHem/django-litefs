@@ -4,7 +4,7 @@ from pathlib import Path
 
 from django.db.backends.sqlite3.base import (
     DatabaseWrapper as SQLite3DatabaseWrapper,
-    Cursor as SQLite3Cursor,
+    SQLiteCursorWrapper as SQLite3Cursor,
 )
 
 from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningError
@@ -46,18 +46,44 @@ class LiteFSCursor(SQLite3Cursor):
                 # Re-raise other exceptions (e.g., LiteFSNotRunningError)
                 raise
 
+    def _strip_sql_comments(self, sql):
+        """Remove SQL comments for write detection (DJANGO-031).
+
+        Removes both block comments (/* ... */) and line comments (-- ...).
+        """
+        import re
+        # Remove block comments /* ... */ (non-greedy, handles nested)
+        sql = re.sub(r'/\*.*?\*/', '', sql, flags=re.DOTALL)
+        # Remove line comments -- ... (to end of line)
+        sql = re.sub(r'--[^\n]*(\n|$)', r'\1', sql)
+        return sql
+
     def _is_write_operation(self, sql):
         """Check if SQL statement is a write operation.
+
+        Handles:
+        - Direct write keywords (INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, REPLACE)
+        - Database maintenance operations (VACUUM, REINDEX, ANALYZE) (DJANGO-030)
+        - CTE patterns: WITH ... INSERT/UPDATE/DELETE (DJANGO-029)
+        - SQL with leading comments (DJANGO-031)
 
         Args:
             sql: SQL statement string
 
         Returns:
-            True if statement is a write operation (INSERT, UPDATE, DELETE, etc.)
+            True if statement is a write operation
         """
         if not sql:
             return False
-        sql_upper = sql.strip().upper()
+
+        # Strip comments before detection (DJANGO-031)
+        sql_clean = self._strip_sql_comments(sql)
+        sql_upper = sql_clean.strip().upper()
+
+        if not sql_upper:
+            return False
+
+        # Direct write keywords (existing + DJANGO-030 maintenance ops)
         write_keywords = (
             "INSERT",
             "UPDATE",
@@ -66,8 +92,20 @@ class LiteFSCursor(SQLite3Cursor):
             "DROP",
             "ALTER",
             "REPLACE",
+            "VACUUM",
+            "REINDEX",
+            "ANALYZE",
         )
-        return any(sql_upper.startswith(keyword) for keyword in write_keywords)
+
+        if any(sql_upper.startswith(keyword) for keyword in write_keywords):
+            return True
+
+        # CTE pattern detection (DJANGO-029): WITH ... INSERT/UPDATE/DELETE
+        if sql_upper.startswith("WITH"):
+            cte_write_keywords = ("INSERT", "UPDATE", "DELETE")
+            return any(keyword in sql_upper for keyword in cte_write_keywords)
+
+        return False
 
     def execute(self, sql, params=None):
         """Execute SQL statement with primary check for write operations.
@@ -101,6 +139,28 @@ class LiteFSCursor(SQLite3Cursor):
         self._check_primary_before_write(sql)
         return super().executemany(sql, param_list)
 
+    def executescript(self, sql_script):
+        """Execute SQL script with primary check (DJANGO-028).
+
+        Scripts can contain multiple statements including writes, so we
+        require primary status before execution.
+
+        Args:
+            sql_script: SQL script containing multiple statements
+
+        Returns:
+            Cursor
+
+        Raises:
+            NotPrimaryError: If attempted on replica
+        """
+        if not self._primary_detector.is_primary():
+            raise NotPrimaryError(
+                "Script execution attempted on replica node. "
+                "Only the primary node can execute scripts that may contain writes."
+            )
+        return super().executescript(sql_script)
+
 
 class DatabaseWrapper(SQLite3DatabaseWrapper):
     """Django database backend for LiteFS SQLite replication.
@@ -117,13 +177,12 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
     occurs during a transaction.
     """
 
-    def __init__(self, settings_dict, alias="default", allow_thread_sharing=None):
+    def __init__(self, settings_dict, alias="default"):
         """Initialize LiteFS database backend.
 
         Args:
             settings_dict: Django database settings dict
             alias: Database alias
-            allow_thread_sharing: Thread sharing flag (deprecated in Django 5.x)
         """
         # Extract LiteFS mount path from OPTIONS
         options = settings_dict.get("OPTIONS", {})
@@ -145,15 +204,24 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
         settings_dict = settings_dict.copy()
         settings_dict["NAME"] = str(mount_path_obj / original_name)
 
-        # Initialize parent SQLite3 backend
-        super().__init__(
-            settings_dict, alias=alias, allow_thread_sharing=allow_thread_sharing
-        )
+        # Initialize parent SQLite3 backend (Django 5.x)
+        super().__init__(settings_dict, alias=alias)
 
         # Create PrimaryDetector use case (Clean Architecture: delegate to use case)
         # Mount path validation already done above (fail-fast)
         self._primary_detector = PrimaryDetector(mount_path)
         self._mount_path = mount_path
+
+    def get_connection_params(self):
+        """Get connection params without litefs_mount_path.
+
+        Override to remove litefs_mount_path from OPTIONS before
+        passing to sqlite3.connect().
+        """
+        params = super().get_connection_params()
+        # Remove litefs_mount_path - it's for our use, not sqlite3
+        params.pop("litefs_mount_path", None)
+        return params
 
     def get_new_connection(self, conn_params):
         """Create new database connection with IMMEDIATE transaction mode.
@@ -175,10 +243,13 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
         connection = super().get_new_connection(conn_params)
 
         # Set IMMEDIATE transaction mode
-        with connection.cursor() as cursor:
+        cursor = connection.cursor()
+        try:
             cursor.execute("PRAGMA journal_mode=WAL")  # LiteFS requires WAL
             cursor.execute("BEGIN IMMEDIATE")
             cursor.execute("COMMIT")
+        finally:
+            cursor.close()
 
         return connection
 

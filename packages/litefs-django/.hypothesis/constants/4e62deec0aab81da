@@ -1,0 +1,4 @@
+# file: /Users/philipphematty/Projects/django-litefs/packages/litefs-django/.venv/bin/pytest
+# hypothesis_version: 6.148.7
+
+['-script.pyw', '.exe', '__main__']

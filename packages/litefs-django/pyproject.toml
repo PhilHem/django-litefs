@@ -16,7 +16,7 @@ build-backend = "hatchling.build"
 packages = ["src/litefs_django"]
 
 [tool.pytest.ini_options]
-testpaths = ["../../tests/django"]
+testpaths = ["../../tests/django_adapter"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

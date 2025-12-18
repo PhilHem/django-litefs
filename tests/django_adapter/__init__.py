@@ -1,4 +1,7 @@
-"""Pytest configuration for Django unit tests."""
+"""Tests for Django LiteFS adapter.
+
+This module sets up Django configuration before any test modules are imported.
+"""
 
 import os
 
