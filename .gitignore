@@ -13,3 +13,11 @@
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+packages/litefs/.hypothesis/*
