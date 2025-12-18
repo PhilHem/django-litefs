@@ -1,6 +1,6 @@
 """litefs-py: Framework-agnostic LiteFS integration for Python."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from litefs.domain.settings import LiteFSSettings
 from litefs.domain.exceptions import LiteFSConfigError
