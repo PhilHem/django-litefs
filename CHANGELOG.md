@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2025-12-18
+
+### Changed
+
+- Refactored test structure: moved `tests/django` to `tests/django_adapter` for better clarity
+
 ## [0.1.2] - 2025-12-18
 
 ### Added
