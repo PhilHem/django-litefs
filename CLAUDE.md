@@ -86,6 +86,7 @@ This project follows Clean Architecture principles. **Flag violations when spott
 - Dependencies point **inward only**
 - Inner layers know nothing about outer layers
 - Domain/Entities have zero external dependencies
+- **Framework adapters (Django, FastAPI) must strictly delegate primary detection to `litefs.usecases.PrimaryDetector`**
 
 **Violations to flag:**
 
