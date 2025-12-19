@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2025-12-19
+
+### Fixed
+
+- CTE write detection false positives (CONC-002): column/table names like `delete_flag`, `update_count`, `insert_date` no longer trigger write detection
+- Pre-compiled regex patterns at module level for better performance (PERF-001)
+- Moved `import re` to module level following Python best practices (DJANGO-034)
+
 ## [0.1.3] - 2025-12-18
 
 ### Changed
