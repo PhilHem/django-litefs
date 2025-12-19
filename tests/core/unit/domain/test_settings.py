@@ -150,3 +150,4 @@ class TestPathSanitizationPBT:
         except LiteFSConfigError:
             # If validation fails, should be for a valid reason
             pass
+

@@ -333,3 +333,4 @@ class TestConfigDeterminism:
 
         # All outputs should be byte-identical
         assert yaml1 == yaml2 == yaml3
+

@@ -109,3 +109,4 @@ Decisions made via structured architecture review.
 - No library-level retry; exceptions propagate to application
 - PBT required for config generation and settings validation
 - Deprecation warnings for at least one minor version before removal
+

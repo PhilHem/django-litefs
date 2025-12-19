@@ -73,3 +73,4 @@
 5. On leader change, new leader updates `.primary` file
 
 This works because LiteFS's static mode just checks for the `.primary` file—it doesn't care how the file gets there.
+

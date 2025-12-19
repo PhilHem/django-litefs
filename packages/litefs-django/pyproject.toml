@@ -32,4 +32,9 @@ markers = [
 litefs-py = { path = "../litefs", editable = true }
 
 [dependency-groups]
-dev = ["pytest>=9.0.2", "hypothesis>=6.0.0"]
+dev = [
+    "pytest>=9.0.2",
+    "hypothesis>=6.0.0",
+    "pytest-timeout>=2.4.0",
+]
+

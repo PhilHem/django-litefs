@@ -15,3 +15,4 @@ class DatabaseOperations(SQLite3DatabaseOperations):
 
     # All operations are the same as SQLite3
     # Primary detection and transaction mode are handled in base.py
+

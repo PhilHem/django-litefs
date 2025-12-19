@@ -61,3 +61,4 @@ class ConfigParser:
             raft_self_addr=None,  # Optional field
             raft_peers=None,  # Optional field
         )
+

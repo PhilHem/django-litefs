@@ -21,8 +21,8 @@ Project is in initial development phase. Core architecture and framework adapter
 
 **Goal:** Deliver a minimal viable product with core LiteFS integration and Django adapter support.
 
-- [x] TASK-CORE-001 - Implement `litefs-py` core: settings, config generation, primary detection (fixes CORE-001, CORE-011, CORE-012)
-- [x] TASK-DJANGO-001 - Implement `litefs-django` adapter: settings reader, DB backend (fixes DJANGO-001, DJANGO-002, DJANGO-006, DJANGO-007, DJANGO-008, DJANGO-009, DJANGO-014, DJANGO-020, DJANGO-021, DJANGO-022; noted DJANGO-003)
+- [x] TASK-CORE-001 - Implement `litefs-py` core: settings, config generation, primary detection (fixes CORE-001, CORE-011, CORE-012, CORE-015; wontfix CORE-005, CORE-006, CORE-007, CORE-008, CORE-009, CORE-016)
+- [x] TASK-DJANGO-001 - Implement `litefs-django` adapter: settings reader, DB backend (fixes DJANGO-001, DJANGO-002, DJANGO-006, DJANGO-007, DJANGO-008, DJANGO-009, DJANGO-010, DJANGO-014, DJANGO-020, DJANGO-021, DJANGO-022, DJANGO-028, DJANGO-029, DJANGO-030, DJANGO-031, DJANGO-033, DJANGO-034, PERF-001, CONC-002; wontfix DJANGO-003, DJANGO-032, CONC-001, CONC-003)
 - [ ] TASK-RAFT-001 - Implement static leader election (manual failover, 2-node minimum)
 - [ ] TASK-CMD-001 - Create management commands (status, check)
 - [x] TASK-TEST-001 - Write unit tests with in-memory adapters (concurrency tests added: Django backend - DJANGO-012, DJANGO-015, DJANGO-016, DJANGO-017, DJANGO-018, DJANGO-019, DJANGO-004, DJANGO-023, DJANGO-005, DJANGO-024, DJANGO-025, DJANGO-026, DJANGO-027; PrimaryDetector - CORE-002, CORE-013, CORE-014; property-based tests added: path sanitization - CORE-003-PBT, YAML generation - CORE-004, config determinism - CORE-010)
@@ -67,3 +67,4 @@ Ideas for future work without specific timelines:
 - Additional framework adapters (Flask, Starlette, etc.)
 - Performance optimizations and benchmarking
 - Advanced monitoring and alerting capabilities
+

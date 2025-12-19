@@ -61,3 +61,4 @@ class LiteFSDjangoConfig(AppConfig):
             logger.error(f"Failed to validate LiteFS settings: {e}")
             # Don't raise - allow Django to start even if LiteFS config is invalid
             # Application will fail when trying to use database backend
+

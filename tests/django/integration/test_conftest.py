@@ -117,8 +117,8 @@ class TestIntegrationTestStructure:
 
         Tests should rely on skip_if_no_litefs fixture, not call pytest.skip() internally.
         """
-        # Read the test file source directly
-        test_file_path = Path(__file__).parent / "test_db_backend_integration.py"
+        # Read the test file source directly (refactored to django_adapter directory)
+        test_file_path = Path(__file__).parent.parent.parent / "django_adapter" / "integration" / "test_db_backend_integration.py"
         source = test_file_path.read_text()
 
         # Should not have pytest.skip() calls in test methods
@@ -127,3 +127,4 @@ class TestIntegrationTestStructure:
             "Integration tests should not call pytest.skip() internally. "
             "Use skip_if_no_litefs fixture instead."
         )
+

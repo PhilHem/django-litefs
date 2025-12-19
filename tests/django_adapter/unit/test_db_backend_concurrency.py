@@ -34,6 +34,11 @@ def create_litefs_settings_dict(mount_path, db_name="test.db"):
 # This avoids needing full Django setup for this specific test
 import re
 
+# Pre-compiled regex for CTE write keyword detection (CONC-002)
+# Uses word boundaries to avoid false positives on column/table names
+# like 'delete_flag', 'update_count', 'insert_date', 'deleted_items'
+_CTE_WRITE_KEYWORD_RE = re.compile(r'\b(INSERT|UPDATE|DELETE)\b', re.IGNORECASE)
+
 
 def _strip_sql_comments(sql):
     """Remove SQL comments for write detection (DJANGO-031)."""
@@ -50,7 +55,7 @@ def _is_write_operation(sql):
     Handles:
     - Direct write keywords (INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, REPLACE)
     - Database maintenance operations (VACUUM, REINDEX, ANALYZE) (DJANGO-030)
-    - CTE patterns: WITH ... INSERT/UPDATE/DELETE (DJANGO-029)
+    - CTE patterns: WITH ... INSERT/UPDATE/DELETE (DJANGO-029, CONC-002)
     - SQL with leading comments (DJANGO-031)
     """
     if not sql:
@@ -80,10 +85,11 @@ def _is_write_operation(sql):
     if any(sql_upper.startswith(keyword) for keyword in write_keywords):
         return True
 
-    # CTE pattern detection (DJANGO-029): WITH ... INSERT/UPDATE/DELETE
+    # CTE pattern detection (DJANGO-029, CONC-002): WITH ... INSERT/UPDATE/DELETE
+    # Uses word boundary regex to avoid false positives on column/table names
+    # like 'delete_flag', 'update_count', 'insert_date', 'deleted_items'
     if sql_upper.startswith("WITH"):
-        cte_write_keywords = ("INSERT", "UPDATE", "DELETE")
-        return any(keyword in sql_upper for keyword in cte_write_keywords)
+        return bool(_CTE_WRITE_KEYWORD_RE.search(sql_clean))
 
     return False
 
@@ -1064,6 +1070,98 @@ class TestWriteDetectionGaps:
         UPDATE table1 SET value = 1"""
         assert _is_write_operation(sql) is True, (
             "Mixed comments before UPDATE should be detected as write"
+        )
+
+    # CONC-002: CTE detection false positive tests
+    def test_cte_select_with_delete_column_not_write(self):
+        """Test CTE SELECT with 'delete_flag' column is NOT detected as write (CONC-002).
+
+        Bug: substring match on 'DELETE' in 'delete_flag' causes false positive.
+        """
+        sql = """
+        WITH cte AS (SELECT id FROM table1)
+        SELECT delete_flag, id FROM table1
+        """
+        assert _is_write_operation(sql) is False, (
+            "CTE with SELECT containing 'delete_flag' column should not be detected as write"
+        )
+
+    def test_cte_select_with_update_column_not_write(self):
+        """Test CTE SELECT with 'update_count' column is NOT detected as write (CONC-002).
+
+        Bug: substring match on 'UPDATE' in 'update_count' causes false positive.
+        """
+        sql = """
+        WITH cte AS (SELECT id FROM table1)
+        SELECT update_count, id FROM table1
+        """
+        assert _is_write_operation(sql) is False, (
+            "CTE with SELECT containing 'update_count' column should not be detected as write"
+        )
+
+    def test_cte_select_with_insert_column_not_write(self):
+        """Test CTE SELECT with 'insert_date' column is NOT detected as write (CONC-002).
+
+        Bug: substring match on 'INSERT' in 'insert_date' causes false positive.
+        """
+        sql = """
+        WITH cte AS (SELECT id FROM table1)
+        SELECT insert_date, id FROM table1
+        """
+        assert _is_write_operation(sql) is False, (
+            "CTE with SELECT containing 'insert_date' column should not be detected as write"
+        )
+
+    def test_cte_with_keyword_in_table_name_not_write(self):
+        """Test CTE SELECT from 'deleted_items' table is NOT detected as write (CONC-002).
+
+        Bug: substring match on 'DELETE' in 'deleted_items' causes false positive.
+        """
+        sql = """
+        WITH cte AS (SELECT id FROM other_table)
+        SELECT * FROM deleted_items WHERE id IN (SELECT id FROM cte)
+        """
+        assert _is_write_operation(sql) is False, (
+            "CTE with SELECT from 'deleted_items' table should not be detected as write"
+        )
+
+    def test_cte_actual_insert_still_detected(self):
+        """Test CTE with actual INSERT statement is still detected (CONC-002).
+
+        Regression test: ensure fix doesn't break real INSERT detection.
+        """
+        sql = """
+        WITH cte AS (SELECT id FROM table1)
+        INSERT INTO archive SELECT * FROM cte
+        """
+        assert _is_write_operation(sql) is True, (
+            "CTE with actual INSERT should still be detected as write"
+        )
+
+    def test_cte_actual_update_still_detected(self):
+        """Test CTE with actual UPDATE statement is still detected (CONC-002).
+
+        Regression test: ensure fix doesn't break real UPDATE detection.
+        """
+        sql = """
+        WITH cte AS (SELECT id FROM table1 WHERE active = 0)
+        UPDATE table1 SET deleted = 1 WHERE id IN (SELECT id FROM cte)
+        """
+        assert _is_write_operation(sql) is True, (
+            "CTE with actual UPDATE should still be detected as write"
+        )
+
+    def test_cte_actual_delete_still_detected(self):
+        """Test CTE with actual DELETE statement is still detected (CONC-002).
+
+        Regression test: ensure fix doesn't break real DELETE detection.
+        """
+        sql = """
+        WITH cte AS (SELECT id FROM table1 WHERE created_at < '2020-01-01')
+        DELETE FROM table1 WHERE id IN (SELECT id FROM cte)
+        """
+        assert _is_write_operation(sql) is True, (
+            "CTE with actual DELETE should still be detected as write"
         )
 
 

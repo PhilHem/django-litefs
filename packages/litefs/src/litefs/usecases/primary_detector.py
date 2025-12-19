@@ -38,3 +38,4 @@ class PrimaryDetector:
             )
 
         return self.primary_file.exists()
+

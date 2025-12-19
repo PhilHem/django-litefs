@@ -43,3 +43,4 @@ def get_litefs_settings(django_settings: dict[str, Any]) -> LiteFSSettings:
 
     # Create domain object (validation happens in __post_init__)
     return LiteFSSettings(**kwargs)
+

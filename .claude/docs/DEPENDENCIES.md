@@ -37,3 +37,4 @@
 | pre-commit | Git hooks                |
 | tox        | Multi-env testing        |
 | docker     | Integration tests (FUSE) |
+

@@ -98,3 +98,4 @@ def test_config_includes_mount_path(mount_path):
     config = ConfigGenerator().generate(settings)
     assert mount_path in config
 ```
+

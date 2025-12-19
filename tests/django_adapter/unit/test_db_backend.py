@@ -250,3 +250,46 @@ class TestDatabaseBackend:
             assert any("IMMEDIATE" in sql.upper() for sql in begin_statements), (
                 f"BEGIN IMMEDIATE not found. Found: {begin_statements}"
             )
+
+    def test_strip_sql_comments_uses_precompiled_regex(self):
+        """Test that _strip_sql_comments uses pre-compiled regex patterns (PERF-001).
+
+        Verifies that module-level compiled patterns _BLOCK_COMMENT_RE and
+        _LINE_COMMENT_RE exist and are used instead of re.sub() compiling on each call.
+        """
+        import re
+        from litefs_django.db.backends.litefs import base
+
+        # Check module-level compiled patterns exist
+        assert hasattr(base, "_BLOCK_COMMENT_RE"), (
+            "Module should have _BLOCK_COMMENT_RE compiled pattern"
+        )
+        assert hasattr(base, "_LINE_COMMENT_RE"), (
+            "Module should have _LINE_COMMENT_RE compiled pattern"
+        )
+
+        # Verify they are compiled regex patterns
+        assert isinstance(base._BLOCK_COMMENT_RE, re.Pattern), (
+            "_BLOCK_COMMENT_RE should be a compiled regex pattern"
+        )
+        assert isinstance(base._LINE_COMMENT_RE, re.Pattern), (
+            "_LINE_COMMENT_RE should be a compiled regex pattern"
+        )
+
+    def test_re_module_imported_at_top(self):
+        """Test that re module is imported at module level (DJANGO-034).
+
+        Verifies that `import re` appears at module level in base.py,
+        not inside a method body.
+        """
+        from litefs_django.db.backends.litefs import base
+        import inspect
+
+        # Get the source code of _strip_sql_comments method
+        source = inspect.getsource(base.LiteFSCursor._strip_sql_comments)
+
+        # The method should NOT contain 'import re' inside its body
+        assert "import re" not in source, (
+            "_strip_sql_comments should not import re inside method body. "
+            "Import should be at module level."
+        )

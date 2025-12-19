@@ -1,5 +1,6 @@
 """LiteFS database backend base implementation."""
 
+import re
 from pathlib import Path
 
 from django.db.backends.sqlite3.base import (
@@ -9,6 +10,15 @@ from django.db.backends.sqlite3.base import (
 
 from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningError
 from litefs_django.exceptions import NotPrimaryError
+
+# Pre-compiled regex patterns for SQL comment stripping (PERF-001)
+_BLOCK_COMMENT_RE = re.compile(r'/\*.*?\*/', re.DOTALL)
+_LINE_COMMENT_RE = re.compile(r'--[^\n]*(\n|$)')
+
+# Pre-compiled regex for CTE write keyword detection (CONC-002)
+# Uses word boundaries to avoid false positives on column/table names
+# like 'delete_flag', 'update_count', 'insert_date', 'deleted_items'
+_CTE_WRITE_KEYWORD_RE = re.compile(r'\b(INSERT|UPDATE|DELETE)\b', re.IGNORECASE)
 
 
 class LiteFSCursor(SQLite3Cursor):
@@ -50,12 +60,12 @@ class LiteFSCursor(SQLite3Cursor):
         """Remove SQL comments for write detection (DJANGO-031).
 
         Removes both block comments (/* ... */) and line comments (-- ...).
+        Uses pre-compiled regex patterns at module level (PERF-001, DJANGO-034).
         """
-        import re
         # Remove block comments /* ... */ (non-greedy, handles nested)
-        sql = re.sub(r'/\*.*?\*/', '', sql, flags=re.DOTALL)
+        sql = _BLOCK_COMMENT_RE.sub('', sql)
         # Remove line comments -- ... (to end of line)
-        sql = re.sub(r'--[^\n]*(\n|$)', r'\1', sql)
+        sql = _LINE_COMMENT_RE.sub(r'\1', sql)
         return sql
 
     def _is_write_operation(self, sql):
@@ -100,10 +110,11 @@ class LiteFSCursor(SQLite3Cursor):
         if any(sql_upper.startswith(keyword) for keyword in write_keywords):
             return True
 
-        # CTE pattern detection (DJANGO-029): WITH ... INSERT/UPDATE/DELETE
+        # CTE pattern detection (DJANGO-029, CONC-002): WITH ... INSERT/UPDATE/DELETE
+        # Uses word boundary regex to avoid false positives on column/table names
+        # like 'delete_flag', 'update_count', 'insert_date', 'deleted_items'
         if sql_upper.startswith("WITH"):
-            cte_write_keywords = ("INSERT", "UPDATE", "DELETE")
-            return any(keyword in sql_upper for keyword in cte_write_keywords)
+            return bool(_CTE_WRITE_KEYWORD_RE.search(sql_clean))
 
         return False
 
@@ -265,3 +276,4 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
         under concurrent load. This is required for LiteFS's single-writer model.
         """
         self.cursor().execute("BEGIN IMMEDIATE")
+

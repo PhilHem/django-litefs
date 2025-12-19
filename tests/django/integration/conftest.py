@@ -64,3 +64,4 @@ def skip_if_no_litefs(litefs_available):
     """Fixture that skips test if LiteFS infrastructure is not available."""
     if not litefs_available:
         pytest.skip("LiteFS infrastructure (Docker/FUSE) not available")
+
