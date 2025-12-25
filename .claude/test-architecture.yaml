@@ -1,0 +1,350 @@
+# Test Responsibility Architecture (TRA) Contract
+# django-litefs project
+
+version: "1.0"
+project: "django-litefs"
+description: |
+  Test Responsibility Architecture contract defining tier assignments,
+  namespace boundaries, and execution contexts for the litefs ecosystem.
+  Enforces Clean Architecture principles through test organization.
+
+# Enforcement mode: 'warn' during migration, 'error' for strict enforcement
+enforcement:
+  mode: "warn"
+  description: |
+    Currently in 'warn' mode to allow migration of existing tests
+    to TRA structure. Switch to 'error' once all tests comply.
+
+# Tier Definitions
+# Tiers map to test execution costs and isolation requirements
+tiers:
+  1:
+    name: "unit"
+    description: "Fast, isolated tests with zero I/O or subprocess spawning"
+    characteristics:
+      - "No filesystem access beyond /tmp"
+      - "No subprocess calls or LiteFS binary invocation"
+      - "No FUSE or Docker required"
+      - "Execution time: <100ms per test"
+    pytest_marker: "unit"
+    execution_contexts:
+      - "pre-commit"
+      - "ci-push"
+      - "ci-main"
+
+  2:
+    name: "integration"
+    description: "Tests requiring external resources (Docker, FUSE, real filesystem)"
+    characteristics:
+      - "May access filesystem beyond /tmp"
+      - "May spawn subprocesses"
+      - "Requires FUSE mount or Docker containers"
+      - "Execution time: 1-10s per test"
+    pytest_marker: "integration"
+    execution_contexts:
+      - "ci-main"
+    notes: "Integration tests run only on main branch to conserve CI resources"
+
+  3:
+    name: "e2e"
+    description: "End-to-end tests exercising full system"
+    characteristics:
+      - "Full multi-node cluster setup"
+      - "Requires Docker Compose with FUSE mounts"
+      - "Tests replication, failover, split-brain scenarios"
+      - "Execution time: 10-60s per test"
+    pytest_marker: "e2e"
+    execution_contexts:
+      - "ci-main"
+    notes: "E2E tests run only on main branch; local development via docker-compose"
+
+# Namespaces map to Clean Architecture layers
+# Each namespace has default tier assignments
+namespaces:
+  Domain.Invariant:
+    description: "Domain value objects enforcing invariants (settings, config, state)"
+    default_tier: 1
+    example_paths:
+      - "packages/litefs/src/litefs/domain/settings.py"
+      - "packages/litefs/src/litefs/domain/split_brain.py"
+    test_location: "tests/core/unit/domain/"
+    guidelines: |
+      - Tests for StaticLeaderConfig, RaftSettings, etc.
+      - Should test validation invariants (hostname rules, path constraints)
+      - Use property-based testing for input space exploration
+      - Zero external dependencies
+    examples:
+      - "tests/core/unit/domain/test_static_leader_config.py"
+      - "tests/core/unit/domain/test_settings.py"
+
+  Domain.Entity:
+    description: "Domain entities with identity and mutable state"
+    default_tier: 1
+    example_paths:
+      - "packages/litefs/src/litefs/domain/"
+    test_location: "tests/core/unit/domain/"
+    guidelines: |
+      - Tests for entities like HealthStatus, RaftClusterState
+      - Focus on entity behavior and state transitions
+      - Property-based tests for invariant maintenance
+      - No I/O, no external calls
+    examples:
+      - "tests/core/unit/domain/test_health_status.py"
+      - "tests/core/unit/domain/test_split_brain_detection.py"
+
+  UseCase:
+    description: "Use cases orchestrating domain and port logic"
+    default_tier: 1
+    example_paths:
+      - "packages/litefs/src/litefs/usecases/primary_detector.py"
+      - "packages/litefs/src/litefs/usecases/split_brain_detector.py"
+      - "packages/litefs/src/litefs/usecases/health_checker.py"
+    test_location: "tests/core/unit/usecases/"
+    guidelines: |
+      - Test use case orchestration with mocked ports
+      - Use in-memory adapter fixtures (InMemoryProcessRunner, etc.)
+      - Verify correct port delegation and error handling
+      - Include concurrency tests for thread-unsafe uses cases
+    examples:
+      - "tests/core/unit/usecases/test_primary_detector.py"
+      - "tests/core/unit/usecases/test_split_brain_detector.py"
+      - "tests/core/unit/usecases/test_split_brain_detector_concurrency.py"
+
+  Port:
+    description: "Port interfaces and default implementations (abstract boundaries)"
+    default_tier: 1
+    example_paths:
+      - "packages/litefs/src/litefs/adapters/ports.py"
+    test_location: "tests/core/unit/adapters/"
+    guidelines: |
+      - Test that port protocols are correctly defined (runtime_checkable)
+      - Test default implementations (EnvironmentNodeIDResolver, etc.)
+      - Verify port contracts and behavior
+      - Test protocol compliance with minimal implementations
+    examples:
+      - "tests/core/unit/adapters/test_ports.py"
+      - "tests/core/unit/adapters/test_raft_leader_election_adapter.py"
+
+  Adapter:
+    description: "Framework adapters (Django, FastAPI) delegating to core use cases"
+    default_tier: 1
+    tier_overrides:
+      django_settings: 1  # Pure settings reading
+      django_db_backend: 2  # Requires database setup
+      django_middleware: 1  # Pure middleware logic
+      fastapi_routes: 1  # Pure route handling
+    example_paths:
+      - "packages/litefs-django/src/litefs_django/"
+      - "packages/litefs-fastapi/src/litefs_fastapi/"
+    test_location:
+      - "tests/django_adapter/unit/"
+      - "tests/django_adapter/integration/"
+      - "tests/fastapi_adapter/unit/"
+    guidelines: |
+      - Adapters are thin translation layers from framework to core
+      - Settings readers, middleware, routes: tier 1 (pure logic)
+      - Database backends, process managers: tier 2+ (external resources)
+      - Use dependency injection to avoid Django/FastAPI imports in core
+      - Mock framework-specific objects (Django request, settings, etc.)
+      - Follow: "Adapter → UseCase → Domain" dependency flow
+    examples:
+      - "tests/django_adapter/unit/test_settings.py"
+      - "tests/django_adapter/unit/test_appconfig.py"
+      - "tests/django_adapter/unit/test_split_brain_middleware.py"
+
+# Execution Contexts define when tests should run
+# Allows gradual enforcement based on CI stage
+execution_contexts:
+  pre-commit:
+    description: "Local pre-commit hook (developer machine)"
+    tiers_required: [1]
+    timeout_seconds: 30
+    skip_integration: true
+    notes: |
+      Developers run only tier-1 unit tests before commit.
+      Fast feedback loop: ~2-5 seconds.
+
+  ci-push:
+    description: "CI on pull request push (GitHub Actions)"
+    tiers_required: [1, 2]
+    timeout_seconds: 120
+    skip_integration: false
+    notes: |
+      PR checks run unit + property tests for fast feedback.
+      Integration tests skipped to conserve CI credits.
+
+  ci-main:
+    description: "CI on main branch merge (full test suite)"
+    tiers_required: [1, 2, 3]
+    timeout_seconds: 600
+    skip_integration: false
+    notes: |
+      Main branch runs full suite including integration and e2e.
+      Allows full validation before release.
+
+# Thresholds for test coverage and performance
+thresholds:
+  coverage:
+    unit_minimum: 80  # % coverage for unit tests
+    integration_minimum: 70  # % coverage for integration tests
+    domain_minimum: 95  # High coverage for domain/invariant classes
+    port_minimum: 85  # High coverage for port interfaces
+    adapter_minimum: 75  # Adapters lower priority (thin layers)
+    notes: |
+      These are target thresholds. Current project may not meet all;
+      enforce incrementally as codebase matures.
+
+  performance:
+    unit_max_seconds: 0.5  # Max time per unit test
+    unit_suite_max_seconds: 30  # Max time for entire unit suite
+    integration_max_seconds: 10  # Max time per integration test
+    e2e_max_seconds: 60  # Max time per e2e test
+    notes: |
+      Use pytest-durations to identify slow tests.
+      Slow tests often indicate missing mocks or architectural issues.
+
+  property_based:
+    minimum_examples: 100  # Hypothesis examples per property test
+    deadline_millis: 500  # Max time per generated example
+    notes: |
+      Property tests validate invariants at scale.
+      Reduce examples if too slow; investigate root causes.
+
+# Package Structure Mapping
+# Shows how test namespaces align with package structure
+packages:
+  litefs:
+    path: "packages/litefs/"
+    description: "Core LiteFS library (framework-agnostic)"
+    namespaces:
+      - Domain.Invariant
+      - Domain.Entity
+      - UseCase
+      - Port
+    test_dirs:
+      unit: "tests/core/unit/"
+      integration: "tests/core/integration/"
+    coverage_target: 90
+    notes: |
+      Core package has strictest architectural requirements.
+      All changes must maintain Clean Architecture boundaries.
+
+  litefs-django:
+    path: "packages/litefs-django/"
+    description: "Django adapter"
+    namespaces:
+      - Adapter  # Thin layer: translate Django → Core
+      - UseCase  # Some use cases implemented at adapter level (commands, signals)
+    test_dirs:
+      unit: "tests/django_adapter/unit/"
+      integration: "tests/django_adapter/integration/"
+    coverage_target: 85
+    notes: |
+      Adapter layer: delegate to core litefs whenever possible.
+      Avoid business logic in Django models/views.
+
+  litefs-fastapi:
+    path: "packages/litefs-fastapi/"
+    description: "FastAPI adapter"
+    namespaces:
+      - Adapter  # Thin layer: translate FastAPI → Core
+    test_dirs:
+      unit: "tests/fastapi_adapter/unit/"
+      integration: "tests/fastapi_adapter/integration/"
+    coverage_target: 85
+    notes: |
+      Same principles as Django adapter.
+      Delegate to core litefs for business logic.
+
+  py-leader:
+    path: "packages/py-leader/"
+    description: "Raft consensus implementation (PySyncObj wrapper)"
+    namespaces:
+      - Domain.Invariant  # Raft configuration
+      - UseCase  # Raft leader election
+    test_dirs:
+      unit: "tests/py_leader/unit/"
+    coverage_target: 85
+
+# Concurrency Boundaries (Advanced)
+# Documents where concurrency is allowed/forbidden
+concurrency_boundaries:
+  allowed_in_layers:
+    - "Adapter"  # Framework threads, executors OK
+    - "Port"  # Port implementations may use threading
+  forbidden_in_layers:
+    - "Domain"  # Pure domain logic must be thread-safe by design
+    - "UseCase"  # Use cases coordinate; should not spawn threads
+  notes: |
+    Enforce "concurrency at edges" principle.
+    Domain entities should be immutable or use locks for mutation.
+    UseCase results should be thread-safe without explicit coordination.
+
+# Test Markers Registry
+# Documents all pytest markers used in project
+markers:
+  unit:
+    description: "Tier 1: Fast, isolated unit test"
+    definition: "@pytest.mark.unit"
+
+  integration:
+    description: "Tier 2: Test requiring external resources"
+    definition: "@pytest.mark.integration"
+
+  e2e:
+    description: "Tier 3: End-to-end system test"
+    definition: "@pytest.mark.e2e"
+
+  property:
+    description: "Property-based test (Hypothesis)"
+    definition: "@pytest.mark.property"
+    notes: |
+      Property tests can be combined with tier markers:
+      @pytest.mark.unit
+      @pytest.mark.property
+      def test_invariant(self, hypothesis_input):
+          ...
+
+  no_parallel:
+    description: "Test that cannot run in parallel (xdist incompatible)"
+    definition: "@pytest.mark.no_parallel"
+    notes: |
+      Use when test has global state, file locks, or shared resources.
+      Document the reason in test comment.
+
+# Migration Guidance
+# How to transition existing tests to TRA
+migration:
+  phase_1:
+    timeline: "Sprint 1-2"
+    focus: "Document current state"
+    tasks:
+      - "Run test suite to establish baseline coverage"
+      - "Map existing tests to namespaces"
+      - "Identify tier 2+ tests in unit directories (violations)"
+
+  phase_2:
+    timeline: "Sprint 3-4"
+    focus: "Enforce tier separation"
+    tasks:
+      - "Move integration tests out of unit/ directories"
+      - "Extract external dependencies into mocks/fixtures"
+      - "Add @pytest.mark.unit/integration/e2e annotations"
+
+  phase_3:
+    timeline: "Sprint 5+"
+    focus: "Optimize test suite"
+    tasks:
+      - "Add property-based tests for domain invariants"
+      - "Profile tests; optimize slow ones"
+      - "Reach coverage thresholds per package"
+      - "Switch enforcement to 'error' mode"
+
+# References
+references:
+  - "CLAUDE.md: Subagent Context section (package commands, test patterns)"
+  - ".claude/skills/litefs-testing/SKILL.md: Testing patterns and fixtures"
+  - "~/.claude/skills/clean-architecture/SKILL.md: Architecture principles"
+  - "tests/core/unit/domain/test_static_leader_config.py: Domain invariant example"
+  - "tests/core/unit/usecases/test_primary_detector.py: UseCase example"
+  - "tests/core/unit/adapters/test_ports.py: Port interface example"

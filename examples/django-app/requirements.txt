@@ -1,0 +1,4 @@
+Django==5.1.4
+litefs-py @ file:///workspace/packages/litefs
+litefs-django @ file:///workspace/packages/litefs-django
+gunicorn==23.0.0

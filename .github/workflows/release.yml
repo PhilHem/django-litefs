@@ -1,0 +1,139 @@
+name: PyPI Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build wheels
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Build litefs-py wheel
+        working-directory: packages/litefs
+        run: |
+          uv sync
+          uv run pip install build
+          uv run python -m build
+
+      - name: Build litefs-django wheel
+        working-directory: packages/litefs-django
+        run: |
+          uv sync
+          uv run pip install build
+          uv run python -m build
+
+      - name: Build litefs-fastapi wheel
+        working-directory: packages/litefs-fastapi
+        run: |
+          uv sync
+          uv run pip install build
+          uv run python -m build
+
+      - name: Build py-leader wheel
+        working-directory: packages/py-leader
+        run: |
+          uv sync
+          uv run pip install build
+          uv run python -m build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels
+          path: packages/*/dist/
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: wheels
+          path: dist/
+
+      - name: Flatten artifact directory structure
+        run: |
+          mkdir -p dist_flat
+          find dist -name "*.whl" -o -name "*.tar.gz" | while read file; do
+            cp "$file" dist_flat/
+          done
+          rm -rf dist
+          mv dist_flat dist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          skip-existing: true
+
+  release:
+    name: Create GitHub Release
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Get changelog entry
+        id: changelog
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          # Extract changelog for this version
+          awk "
+            /^## \[$version\]/ { found=1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          " CHANGELOG.md | sed -e '/^$/d;1{/^$/d}' > changelog_entry.txt
+
+          # If no specific version found, use Unreleased section
+          if [ ! -s changelog_entry.txt ]; then
+            awk "
+              /^## \[Unreleased\]/ { found=1; next }
+              found && /^## \[/ { exit }
+              found { print }
+            " CHANGELOG.md | sed -e '/^$/d;1{/^$/d}' > changelog_entry.txt
+          fi
+
+          cat changelog_entry.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref }}
+          body_path: changelog_entry.txt
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

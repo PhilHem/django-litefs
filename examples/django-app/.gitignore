@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.Python
+env/
+venv/
+.venv
+.env
+
+# Django
+db.sqlite3
+/data/
+/litefs/
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project-specific
+# Keep litefs.yml (example config), ignore variations like litefs.local.yml
+litefs.local.yml
+litefs.*.yml
+!litefs.yml
+docker-compose.override.yml

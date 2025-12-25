@@ -1,0 +1,29 @@
+# LiteFS configuration template
+# This file demonstrates the static leader election mode (V1)
+# The primary node is determined by the PRIMARY_HOSTNAME environment variable
+
+fuse:
+  dir: /litefs
+
+# Data directory for LiteFS state
+data-dir: /data
+
+# Replication configuration
+# All nodes form a cluster and sync database changes from primary to replicas
+replication:
+  candidate: false  # Only primary is a Raft candidate
+
+# Static lease configuration - the primary node controls the .primary file
+lease:
+  # Interval for lease heartbeat
+  candidate: false
+
+# This configuration uses static leader election:
+# - PRIMARY_HOSTNAME environment variable determines the primary
+# - All other nodes are read-only replicas
+# - Write requests to replicas are forwarded to primary by LiteFS proxy
+
+# For production deployments:
+# 1. Mount this config into each container at the same path
+# 2. Set PRIMARY_HOSTNAME to the primary node's hostname
+# 3. Configure networking so nodes can reach each other on port 20202 (replication)
