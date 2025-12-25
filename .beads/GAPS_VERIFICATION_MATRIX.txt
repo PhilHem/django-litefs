@@ -1,0 +1,168 @@
+PRODUCTION READINESS GAPS - VERIFICATION MATRIX
+================================================
+
+Gap #1: Django Adapter Test Failures
+────────────────────────────────────────────────────────────────────────────────
+Status:        TRACKED (Partial - tests failing, no repair task)
+Beads Issues:  6 issues (django-litefs-4xv, 5la, 8t1, 3yh, 2i4, def)
+Repo Status:   Tests written, not committed, failing
+
+Files to Check:
+  tests/django_adapter/unit/test_split_brain_middleware.py       [NEW] ✗ Failing
+  tests/django_adapter/unit/test_split_brain_signals.py          [NEW] ✗ Failing
+  tests/django_adapter/unit/test_health_check_view.py            [NEW] ✗ Failing
+  tests/django_adapter/unit/test_db_backend.py                   [MODIFIED]
+  packages/litefs-django/src/litefs_django/middleware.py         [NEW] ✗ Untested
+  packages/litefs-django/src/litefs_django/signals.py            [NEW] ✗ Untested
+  packages/litefs-django/src/litefs_django/views.py              [NEW] ✗ Untested
+
+Missing Task:  EXPLICIT repair/fix task for failing tests
+
+
+Gap #2: Missing User-Facing README.md
+────────────────────────────────────────────────────────────────────────────────
+Status:        NOT TRACKED (No beads issue, critical for release)
+Roadmap:       NOT MENTIONED in ROADMAP.md
+Repo Status:   No file at project root
+
+Expected File:  /Users/philipphematty/Projects/django-litefs/README.md
+Status:         ✗ MISSING
+
+Should Include:
+  • Project overview & vision
+  • Feature matrix (litefs-py, litefs-django, litefs-fastapi)
+  • Installation guide (pip install)
+  • Quick-start example
+  • Configuration guide
+  • Deployment examples
+  • License (MIT)
+  • Contributing guidelines
+
+Missing Task:  bd create for README.md writing
+
+
+Gap #3: Missing Example Application
+────────────────────────────────────────────────────────────────────────────────
+Status:        NOT TRACKED (Mentioned in ROADMAP.md as TASK-EXAM-001, not in beads)
+Roadmap:       TASK-EXAM-001 in Phase 1 (not in beads)
+Repo Status:   Directory doesn't exist
+
+Expected Dir:   /Users/philipphematty/Projects/django-litefs/examples/django-app/
+Status:         ✗ MISSING (entire examples/ dir missing)
+
+Should Demonstrate:
+  • Django project setup
+  • LiteFS configuration
+  • Database backend integration
+  • Health check usage
+  • Deployment patterns
+
+Missing Task:  ROADMAP.md task TASK-EXAM-001 not migrated to beads
+
+
+Gap #4: Missing Management Commands
+────────────────────────────────────────────────────────────────────────────────
+Status:        NOT TRACKED (Mentioned in ROADMAP.md as TASK-CMD-001, not in beads)
+Roadmap:       TASK-CMD-001 in Phase 1 (not in beads)
+Repo Status:   No management/ directory
+
+Expected Dir:   /Users/philipphematty/Projects/django-litefs/packages/litefs-django/src/litefs_django/management/commands/
+Status:         ✗ MISSING
+
+Expected Commands:
+  • litefs_status.py       - Show node status, leader info, replication state
+  • litefs_check.py        - Health check and validation
+
+Current Structure:
+  /packages/litefs-django/src/litefs_django/ contains:
+    ✓ __init__.py
+    ✓ apps.py
+    ✓ settings.py
+    ✓ middleware.py (new, untested)
+    ✓ signals.py (new, untested)
+    ✓ urls.py
+    ✓ views.py (new, untested)
+    ✓ exceptions.py
+    ✗ management/
+
+Missing Task:  ROADMAP.md task TASK-CMD-001 not migrated to beads
+
+
+Gap #5: Version Mismatches
+────────────────────────────────────────────────────────────────────────────────
+Status:        NOT TRACKED (No beads issue for version sync)
+Roadmap:       NOT MENTIONED in ROADMAP.md
+Repo Status:   Multiple version sources with inconsistent values
+
+Package: litefs-py
+  pyproject.toml:  /Users/philipphematty/Projects/django-litefs/packages/litefs/pyproject.toml
+    version = "0.1.4"
+  __init__.py:     /Users/philipphematty/Projects/django-litefs/packages/litefs/src/litefs/__init__.py
+    __version__ = "0.1.1"
+  Status:          ⚠️ MISMATCH (0.1.4 vs 0.1.1)
+
+Package: litefs-django
+  pyproject.toml:  /Users/philipphematty/Projects/django-litefs/packages/litefs-django/pyproject.toml
+    version = "0.1.4"
+  __init__.py:     /Users/philipphematty/Projects/django-litefs/packages/litefs-django/src/litefs_django/__init__.py
+    __version__ = "0.1.0"
+  Status:          ⚠️ MISMATCH (0.1.4 vs 0.1.0)
+
+Package: litefs-fastapi
+  pyproject.toml:  /Users/philipphematty/Projects/django-litefs/packages/litefs-fastapi/pyproject.toml
+    version = "0.1.0"
+  __init__.py:     /Users/philipphematty/Projects/django-litefs/packages/litefs-fastapi/src/litefs_fastapi/__init__.py
+    Status:         ✓ OK (both 0.1.0)
+
+Package: py-leader
+  pyproject.toml:  /Users/philipphematty/Projects/django-litefs/packages/py-leader/pyproject.toml
+    version = "0.1.0"
+  __init__.py:     /Users/philipphematty/Projects/django-litefs/packages/py-leader/src/py_leader/__init__.py
+    __version__ = "0.1.0"
+  Status:          ✓ OK (both 0.1.0)
+
+Solution:  Single-source in __init__.py, read by pyproject.toml via dynamic
+
+Missing Task:  bd create for version synchronization
+
+
+BONUS: Django API Exports Issue
+────────────────────────────────────────────────────────────────────────────────
+Status:        NOT TRACKED (No beads issue)
+Roadmap:       NOT MENTIONED in ROADMAP.md
+Repo Status:   Incomplete __all__ export
+
+Current State:  /packages/litefs-django/src/litefs_django/__init__.py
+  __all__ = [
+      "split_brain_detected",  # Only exports signal
+  ]
+
+Missing Exports:
+  • middleware (SplitBrainDetectionMiddleware)
+  • views (health_check, split_brain_check)
+  • signals (split_brain_detected module itself)
+  • exceptions (LiteFSError, SplitBrainDetected)
+
+Impact:  IDE autocomplete doesn't show available imports, users must know internal paths
+
+Missing Task:  bd create for Django API exports cleanup
+
+════════════════════════════════════════════════════════════════════════════════
+
+SUMMARY TABLE
+────────────────────────────────────────────────────────────────────────────────
+
+Gap                              Beads   ROADMAP  Status     Impact  Priority
+─────────────────────────────────────────────────────────────────────────────
+1. Django Test Failures          ✓ (6)   N/A      Partial    High    P1
+2. Missing README.md             ✗       ✗        Missing    High    P1
+3. Missing Examples              ✗       ✓ Elem   Missing    High    P2
+4. Missing Mgmt Commands         ✗       ✓ Elem   Missing    High    P2
+5. Version Mismatches            ✗       ✗        Missing    Medium  P2
+6. Django API Exports (bonus)    ✗       ✗        Missing    Low     P3
+
+Legend:
+  ✓ = In beads
+  ✗ = NOT in beads
+  Elem = Mentioned in ROADMAP.md but not migrated to beads
+  Partial = Tracked but incomplete (tests fail, no explicit fix task)
