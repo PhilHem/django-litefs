@@ -241,7 +241,6 @@ class TestRaftLeaderElectionAdapterCleanArchitecture:
         This ensures py-leader is only used through the RaftLeaderElectionPort
         abstraction, not directly imported in this adapter module.
         """
-        import importlib
         import inspect
         import re
 
@@ -259,9 +258,7 @@ class TestRaftLeaderElectionAdapterCleanArchitecture:
 
         for pattern in forbidden_patterns:
             matches = re.findall(pattern, module_source, re.MULTILINE | re.IGNORECASE)
-            assert (
-                not matches
-            ), f"Found forbidden import pattern: {pattern}"
+            assert not matches, f"Found forbidden import pattern: {pattern}"
 
     def test_adapter_only_wraps_port_interface(self) -> None:
         """Test that adapter has minimal implementation (pure wrapper).

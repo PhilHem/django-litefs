@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "FastAPI adapter for LiteFS SQLite replication"
 requires-python = ">=3.10"
 dependencies = [
+    "fastapi>=0.127.0",
     "litefs-py>=0.1.4",
     "pydantic>=2.0.0",
 ]
@@ -37,4 +38,5 @@ dev = [
     "hypothesis>=6.0.0",
     "pytest-timeout>=2.4.0",
     "mypy>=1.11.0",
+    "httpx>=0.28.1",
 ]

@@ -31,6 +31,18 @@ class NotPrimaryError(DatabaseError):
     pass
 
 
+class SplitBrainError(DatabaseError):
+    """Raised when a write operation is attempted during a split-brain condition.
 
+    This is a Django adapter-specific exception that inherits from
+    Django's DatabaseError for integration with Django's error handling.
 
+    A split-brain occurs when network partition causes cluster consensus to break
+    down, resulting in multiple nodes believing they are the leader simultaneously.
+    Writes must be prevented during split-brain to avoid data inconsistency.
 
+    This exception is raised by the LiteFSCursor when a split-brain is detected
+    before attempting any write operation (INSERT, UPDATE, DELETE, etc.).
+    """
+
+    pass

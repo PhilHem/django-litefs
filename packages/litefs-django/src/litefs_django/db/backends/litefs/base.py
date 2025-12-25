@@ -10,21 +10,24 @@ from django.db.backends.sqlite3.base import (
     SQLiteCursorWrapper as SQLite3Cursor,
 )
 
-from litefs.adapters.ports import PrimaryDetectorPort
+from litefs.adapters.ports import PrimaryDetectorPort, SplitBrainDetectorPort
 from litefs.usecases.mount_validator import MountValidator
-from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningError
+from litefs.usecases.primary_detector import PrimaryDetector
 from litefs.usecases.sql_detector import SQLDetector
-from litefs_django.exceptions import NotPrimaryError
+from litefs_django.exceptions import NotPrimaryError, SplitBrainError
 
 if TYPE_CHECKING:
     from sqlite3 import Connection
 
 
 class LiteFSCursor(SQLite3Cursor):
-    """Cursor with primary detection for write operations."""
+    """Cursor with primary detection and split-brain detection for write operations."""
 
     def __init__(
-        self, connection: "Connection", primary_detector: PrimaryDetectorPort
+        self,
+        connection: "Connection",
+        primary_detector: PrimaryDetectorPort,
+        split_brain_detector: SplitBrainDetectorPort | None = None,
     ) -> None:
         """Initialize LiteFS cursor.
 
@@ -32,13 +35,47 @@ class LiteFSCursor(SQLite3Cursor):
             connection: Database connection
             primary_detector: PrimaryDetector use case instance (or any
                 implementation of PrimaryDetectorPort protocol)
+            split_brain_detector: Optional SplitBrainDetector use case instance
+                for detecting split-brain conditions. If provided, split-brain
+                check is performed BEFORE primary status check on write operations.
         """
         super().__init__(connection)
         self._primary_detector = primary_detector
+        self._split_brain_detector = split_brain_detector
         self._sql_detector = SQLDetector()
 
-    def _check_primary_before_write(self, sql):
+    def _check_split_brain_before_write(self, sql: str) -> None:
+        """Check for split-brain condition before write operations.
+
+        Args:
+            sql: SQL statement to check
+
+        Raises:
+            SplitBrainError: If split-brain is detected on a write operation
+        """
+        if not self._split_brain_detector:
+            # No detector provided, skip check
+            return
+
+        if self._sql_detector.is_write_operation(sql):
+            try:
+                split_brain_status = self._split_brain_detector.detect_split_brain()
+                if split_brain_status.is_split_brain:
+                    raise SplitBrainError(
+                        f"Write operation attempted during split-brain condition. "
+                        f"Multiple nodes claim leadership: {split_brain_status.leader_nodes}. "
+                        f"Writes are not allowed during split-brain to prevent data inconsistency."
+                    )
+            except SplitBrainError:
+                raise
+            except Exception:
+                # Re-raise other exceptions (e.g., network errors from detector)
+                raise
+
+    def _check_primary_before_write(self, sql: str) -> None:
         """Check if this node is primary before write operations.
+
+        This check is performed AFTER split-brain check.
 
         Args:
             sql: SQL statement to check
@@ -60,7 +97,9 @@ class LiteFSCursor(SQLite3Cursor):
                 raise
 
     def execute(self, sql, params=None):
-        """Execute SQL statement with primary check for write operations.
+        """Execute SQL statement with split-brain and primary checks for write operations.
+
+        Split-brain check is performed BEFORE primary status check.
 
         Args:
             sql: SQL statement
@@ -70,13 +109,17 @@ class LiteFSCursor(SQLite3Cursor):
             Query result
 
         Raises:
+            SplitBrainError: If split-brain detected on write
             NotPrimaryError: If write attempted on replica
         """
+        self._check_split_brain_before_write(sql)
         self._check_primary_before_write(sql)
         return super().execute(sql, params)
 
     def executemany(self, sql, param_list):
-        """Execute SQL statement multiple times with primary check.
+        """Execute SQL statement multiple times with split-brain and primary checks.
+
+        Split-brain check is performed BEFORE primary status check.
 
         Args:
             sql: SQL statement
@@ -86,16 +129,20 @@ class LiteFSCursor(SQLite3Cursor):
             Query result
 
         Raises:
+            SplitBrainError: If split-brain detected on write
             NotPrimaryError: If write attempted on replica
         """
+        self._check_split_brain_before_write(sql)
         self._check_primary_before_write(sql)
         return super().executemany(sql, param_list)
 
     def executescript(self, sql_script):
-        """Execute SQL script with primary check (DJANGO-028).
+        """Execute SQL script with split-brain and primary checks (DJANGO-028).
 
         Scripts can contain multiple statements including writes, so we
-        require primary status before execution.
+        require split-brain and primary status before execution.
+
+        Split-brain check is performed BEFORE primary status check.
 
         Args:
             sql_script: SQL script containing multiple statements
@@ -104,8 +151,25 @@ class LiteFSCursor(SQLite3Cursor):
             Cursor
 
         Raises:
+            SplitBrainError: If split-brain detected
             NotPrimaryError: If attempted on replica
         """
+        # Check split-brain first (scripts can be writes)
+        if self._split_brain_detector:
+            try:
+                split_brain_status = self._split_brain_detector.detect_split_brain()
+                if split_brain_status.is_split_brain:
+                    raise SplitBrainError(
+                        f"Script execution attempted during split-brain condition. "
+                        f"Multiple nodes claim leadership: {split_brain_status.leader_nodes}. "
+                        f"Scripts may contain writes and are not allowed during split-brain."
+                    )
+            except SplitBrainError:
+                raise
+            except Exception:
+                raise
+
+        # Then check primary status
         if not self._primary_detector.is_primary():
             raise NotPrimaryError(
                 "Script execution attempted on replica node. "
@@ -135,6 +199,7 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
         alias: str = "default",
         *,
         primary_detector: PrimaryDetectorPort | None = None,
+        split_brain_detector: SplitBrainDetectorPort | None = None,
     ) -> None:
         """Initialize LiteFS database backend.
 
@@ -144,6 +209,9 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
             primary_detector: Optional PrimaryDetector instance for dependency
                 injection. If not provided, a new PrimaryDetector is created.
                 Use this for testing with FakePrimaryDetector.
+            split_brain_detector: Optional SplitBrainDetector instance for dependency
+                injection. If not provided, a new SplitBrainDetector is created.
+                Use this for testing with FakeSplitBrainDetector.
         """
         # Extract LiteFS mount path from OPTIONS
         options = settings_dict.get("OPTIONS", {})
@@ -172,6 +240,16 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
         else:
             self._primary_detector = PrimaryDetector(mount_path)
         self._mount_path = mount_path
+
+        # Use injected split-brain detector or create SplitBrainDetector use case
+        if split_brain_detector is not None:
+            self._split_brain_detector: SplitBrainDetectorPort | None = (
+                split_brain_detector
+            )
+        else:
+            # Create default SplitBrainDetector (will use default port implementations)
+            # For now, we'll defer creation to allow flexibility in port resolution
+            self._split_brain_detector = None
 
         # Extract transaction mode from OPTIONS (default: IMMEDIATE)
         self._transaction_mode = options.get("transaction_mode", "IMMEDIATE")
@@ -215,8 +293,12 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
         return connection
 
     def create_cursor(self, name=None):
-        """Create cursor with primary detection."""
-        return LiteFSCursor(self.connection, self._primary_detector)
+        """Create cursor with primary detection and split-brain detection."""
+        return LiteFSCursor(
+            self.connection,
+            primary_detector=self._primary_detector,
+            split_brain_detector=self._split_brain_detector,
+        )
 
     def _start_transaction_under_autocommit(self):
         """Start transaction with configured mode for better lock handling.
@@ -226,8 +308,3 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
         contention under concurrent load. This is required for LiteFS's single-writer model.
         """
         self.cursor().execute(f"BEGIN {self._transaction_mode}")
-
-
-
-
-

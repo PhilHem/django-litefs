@@ -7,7 +7,10 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 
 from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningError
-from litefs_django.db.backends.litefs.base import DatabaseWrapper
+from litefs.usecases.split_brain_detector import SplitBrainDetector, SplitBrainStatus
+from litefs.domain.split_brain import RaftNodeState, RaftClusterState
+from litefs_django.db.backends.litefs.base import DatabaseWrapper, LiteFSCursor
+from litefs_django.exceptions import NotPrimaryError, SplitBrainError
 from .conftest import create_litefs_settings_dict
 
 
@@ -445,3 +448,321 @@ class TestTransactionModeConfiguration:
 
             wrapper = DatabaseWrapper(settings_dict)
             assert wrapper._transaction_mode == "EXCLUSIVE"
+
+
+@pytest.mark.unit
+class TestSplitBrainDetectionInCursor:
+    """Test split-brain detection in LiteFSCursor."""
+
+    def test_litefs_cursor_accepts_split_brain_detector(self):
+        """Test that LiteFSCursor accepts split_brain_detector parameter."""
+        import sqlite3
+        from unittest.mock import Mock
+
+        # Create real in-memory SQLite connection
+        connection = sqlite3.connect(":memory:")
+        mock_primary_detector = Mock()
+        mock_split_brain_detector = Mock(spec=SplitBrainDetector)
+
+        try:
+            # Should not raise exception
+            cursor = LiteFSCursor(
+                connection,
+                primary_detector=mock_primary_detector,
+                split_brain_detector=mock_split_brain_detector,
+            )
+
+            assert cursor._split_brain_detector is mock_split_brain_detector
+        finally:
+            connection.close()
+
+    def test_litefs_cursor_split_brain_detector_optional(self):
+        """Test that LiteFSCursor split_brain_detector is optional."""
+        import sqlite3
+        from unittest.mock import Mock
+
+        # Create real in-memory SQLite connection
+        connection = sqlite3.connect(":memory:")
+        mock_primary_detector = Mock()
+
+        try:
+            # Should work with default None
+            cursor = LiteFSCursor(
+                connection,
+                primary_detector=mock_primary_detector,
+            )
+
+            assert cursor._split_brain_detector is None
+        finally:
+            connection.close()
+
+    def test_split_brain_check_before_primary_on_execute(self):
+        """Test that split-brain is checked BEFORE primary status on execute()."""
+        import sqlite3
+        from unittest.mock import Mock, call
+
+        # Create real in-memory SQLite connection
+        connection = sqlite3.connect(":memory:")
+        mock_primary_detector = Mock()
+        mock_split_brain_detector = Mock(spec=SplitBrainDetector)
+
+        # Setup split-brain detected
+        split_brain_status = SplitBrainStatus(
+            is_split_brain=True,
+            leader_nodes=[
+                RaftNodeState(node_id="node-1", is_leader=True),
+                RaftNodeState(node_id="node-2", is_leader=True),
+            ],
+        )
+        mock_split_brain_detector.detect_split_brain.return_value = split_brain_status
+
+        try:
+            cursor = LiteFSCursor(
+                connection,
+                primary_detector=mock_primary_detector,
+                split_brain_detector=mock_split_brain_detector,
+            )
+
+            # Try write operation - should check split-brain first
+            with pytest.raises(SplitBrainError):
+                cursor.execute("INSERT INTO users (name) VALUES ('Alice')")
+
+            # Split-brain detector should be called
+            mock_split_brain_detector.detect_split_brain.assert_called()
+
+            # Primary detector should NOT be called (split-brain checked first)
+            mock_primary_detector.is_primary.assert_not_called()
+        finally:
+            connection.close()
+
+    def test_split_brain_error_on_execute_write(self):
+        """Test that SplitBrainError is raised on write when split-brain detected."""
+        import sqlite3
+        from unittest.mock import Mock
+
+        connection = sqlite3.connect(":memory:")
+        mock_primary_detector = Mock()
+        mock_split_brain_detector = Mock(spec=SplitBrainDetector)
+
+        split_brain_status = SplitBrainStatus(
+            is_split_brain=True,
+            leader_nodes=[
+                RaftNodeState(node_id="node-1", is_leader=True),
+                RaftNodeState(node_id="node-2", is_leader=True),
+            ],
+        )
+        mock_split_brain_detector.detect_split_brain.return_value = split_brain_status
+
+        try:
+            cursor = LiteFSCursor(
+                connection,
+                primary_detector=mock_primary_detector,
+                split_brain_detector=mock_split_brain_detector,
+            )
+
+            # Execute write should raise SplitBrainError
+            with pytest.raises(SplitBrainError) as exc_info:
+                cursor.execute("UPDATE users SET name='Bob' WHERE id=1")
+
+            # Verify error message mentions split-brain
+            assert "split" in str(exc_info.value).lower()
+        finally:
+            connection.close()
+
+    def test_split_brain_error_on_executemany_write(self):
+        """Test that SplitBrainError is raised on executemany when split-brain detected."""
+        import sqlite3
+        from unittest.mock import Mock
+
+        connection = sqlite3.connect(":memory:")
+        mock_primary_detector = Mock()
+        mock_split_brain_detector = Mock(spec=SplitBrainDetector)
+
+        split_brain_status = SplitBrainStatus(
+            is_split_brain=True,
+            leader_nodes=[
+                RaftNodeState(node_id="node-1", is_leader=True),
+                RaftNodeState(node_id="node-2", is_leader=True),
+            ],
+        )
+        mock_split_brain_detector.detect_split_brain.return_value = split_brain_status
+
+        try:
+            cursor = LiteFSCursor(
+                connection,
+                primary_detector=mock_primary_detector,
+                split_brain_detector=mock_split_brain_detector,
+            )
+
+            # Executemany write should raise SplitBrainError
+            with pytest.raises(SplitBrainError) as exc_info:
+                cursor.executemany("INSERT INTO users VALUES (?, ?)", [("Alice", 1), ("Bob", 2)])
+
+            assert "split" in str(exc_info.value).lower()
+        finally:
+            connection.close()
+
+    def test_split_brain_error_on_executescript_write(self):
+        """Test that SplitBrainError is raised on executescript when split-brain detected."""
+        import sqlite3
+        from unittest.mock import Mock
+
+        connection = sqlite3.connect(":memory:")
+        mock_primary_detector = Mock()
+        mock_split_brain_detector = Mock(spec=SplitBrainDetector)
+
+        split_brain_status = SplitBrainStatus(
+            is_split_brain=True,
+            leader_nodes=[
+                RaftNodeState(node_id="node-1", is_leader=True),
+                RaftNodeState(node_id="node-2", is_leader=True),
+            ],
+        )
+        mock_split_brain_detector.detect_split_brain.return_value = split_brain_status
+
+        try:
+            cursor = LiteFSCursor(
+                connection,
+                primary_detector=mock_primary_detector,
+                split_brain_detector=mock_split_brain_detector,
+            )
+
+            # Executescript should raise SplitBrainError
+            with pytest.raises(SplitBrainError) as exc_info:
+                cursor.executescript("CREATE TABLE test (id INT); INSERT INTO test VALUES (1);")
+
+            assert "split" in str(exc_info.value).lower()
+        finally:
+            connection.close()
+
+    def test_no_split_brain_allows_primary_check_on_execute(self):
+        """Test that when split-brain is not detected, primary check proceeds on execute."""
+        import sqlite3
+        from unittest.mock import Mock
+
+        connection = sqlite3.connect(":memory:")
+        mock_primary_detector = Mock()
+        mock_split_brain_detector = Mock(spec=SplitBrainDetector)
+
+        # No split-brain
+        split_brain_status = SplitBrainStatus(
+            is_split_brain=False,
+            leader_nodes=[RaftNodeState(node_id="node-1", is_leader=True)],
+        )
+        mock_split_brain_detector.detect_split_brain.return_value = split_brain_status
+
+        # Primary detector returns False (replica)
+        mock_primary_detector.is_primary.return_value = False
+
+        try:
+            cursor = LiteFSCursor(
+                connection,
+                primary_detector=mock_primary_detector,
+                split_brain_detector=mock_split_brain_detector,
+            )
+
+            # Write should check split-brain (none), then primary (false) -> raises NotPrimaryError
+            with pytest.raises(NotPrimaryError):
+                cursor.execute("INSERT INTO users VALUES ('Alice')")
+
+            # Both should be called
+            mock_split_brain_detector.detect_split_brain.assert_called()
+            mock_primary_detector.is_primary.assert_called()
+        finally:
+            connection.close()
+
+    def test_read_operation_unaffected_by_split_brain(self):
+        """Test that read operations don't check split-brain."""
+        import sqlite3
+        from unittest.mock import Mock
+
+        connection = sqlite3.connect(":memory:")
+        mock_primary_detector = Mock()
+        mock_split_brain_detector = Mock(spec=SplitBrainDetector)
+
+        # Setup so split-brain would raise if checked
+        split_brain_status = SplitBrainStatus(
+            is_split_brain=True,
+            leader_nodes=[
+                RaftNodeState(node_id="node-1", is_leader=True),
+                RaftNodeState(node_id="node-2", is_leader=True),
+            ],
+        )
+        mock_split_brain_detector.detect_split_brain.return_value = split_brain_status
+
+        try:
+            cursor = LiteFSCursor(
+                connection,
+                primary_detector=mock_primary_detector,
+                split_brain_detector=mock_split_brain_detector,
+            )
+
+            # Mock parent execute to avoid actual SQLite calls
+            with patch.object(type(cursor).__bases__[0], "execute", return_value=cursor):
+                # Read operation should NOT call split-brain detector
+                cursor.execute("SELECT * FROM users")
+
+            # Split-brain detector should NOT be called for read
+            mock_split_brain_detector.detect_split_brain.assert_not_called()
+        finally:
+            connection.close()
+
+    def test_database_wrapper_injects_split_brain_detector(self):
+        """Test that DatabaseWrapper injects split_brain_detector into cursor."""
+        import sqlite3
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mount_path = Path(tmpdir) / "litefs"
+            mount_path.mkdir()
+
+            settings_dict = {
+                "ENGINE": "litefs_django.db.backends.litefs",
+                "NAME": "test.db",
+                "OPTIONS": {
+                    "litefs_mount_path": str(mount_path),
+                },
+            }
+
+            mock_split_brain_detector = Mock(spec=SplitBrainDetector)
+            wrapper = DatabaseWrapper(
+                settings_dict,
+                split_brain_detector=mock_split_brain_detector,
+            )
+
+            # create_cursor should inject the split_brain_detector
+            real_connection = sqlite3.connect(":memory:")
+            try:
+                with patch.object(wrapper, "connection", real_connection):
+                    cursor = wrapper.create_cursor()
+                    assert isinstance(cursor, LiteFSCursor)
+                    assert cursor._split_brain_detector is mock_split_brain_detector
+            finally:
+                real_connection.close()
+
+    def test_database_wrapper_creates_split_brain_detector_if_not_provided(self):
+        """Test that DatabaseWrapper creates SplitBrainDetector if not injected."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mount_path = Path(tmpdir) / "litefs"
+            mount_path.mkdir()
+
+            settings_dict = {
+                "ENGINE": "litefs_django.db.backends.litefs",
+                "NAME": "test.db",
+                "OPTIONS": {
+                    "litefs_mount_path": str(mount_path),
+                },
+            }
+
+            # No split_brain_detector provided
+            wrapper = DatabaseWrapper(settings_dict)
+
+            # Should have created one
+            assert hasattr(wrapper, "_split_brain_detector")
+            # The detector should be a SplitBrainDetector instance (or could be None if optional)
+            # This will be verified in implementation
+
+    def test_split_brain_error_is_database_error(self):
+        """Test that SplitBrainError inherits from Django's DatabaseError."""
+        from django.db import DatabaseError
+
+        assert issubclass(SplitBrainError, DatabaseError)

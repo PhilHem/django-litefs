@@ -9,7 +9,9 @@ from litefs.adapters.ports import (
     EnvironmentNodeIDResolver,
     LeaderElectionPort,
     RaftLeaderElectionPort,
+    SplitBrainDetectorPort,
 )
+from litefs.domain.split_brain import RaftClusterState, RaftNodeState
 
 
 @pytest.mark.unit
@@ -561,3 +563,126 @@ class TestRaftLeaderElectionPort:
 
         # Invariant: heartbeat must be less than election timeout
         assert heartbeat < election_timeout
+
+
+@pytest.mark.unit
+class TestSplitBrainDetectorPort:
+    """Test SplitBrainDetectorPort protocol interface."""
+
+    def test_protocol_has_get_cluster_state_method(self) -> None:
+        """Test that SplitBrainDetectorPort has get_cluster_state method."""
+        assert hasattr(SplitBrainDetectorPort, "get_cluster_state")
+
+    def test_protocol_is_runtime_checkable(self) -> None:
+        """Test that SplitBrainDetectorPort is runtime_checkable."""
+
+        class FakeSplitBrainDetector:
+            def get_cluster_state(self) -> RaftClusterState:
+                return RaftClusterState(
+                    nodes=[RaftNodeState(node_id="node-1", is_leader=True)]
+                )
+
+        fake = FakeSplitBrainDetector()
+        # If runtime_checkable works, isinstance should return True
+        assert isinstance(fake, SplitBrainDetectorPort)
+
+    def test_mock_implementation_satisfies_protocol(self) -> None:
+        """Test that a mock implementation satisfies the protocol."""
+
+        class MockDetector:
+            def get_cluster_state(self) -> RaftClusterState:
+                return RaftClusterState(
+                    nodes=[
+                        RaftNodeState(node_id="node-1", is_leader=True),
+                        RaftNodeState(node_id="node-2", is_leader=False),
+                    ]
+                )
+
+        mock = MockDetector()
+        assert isinstance(mock, SplitBrainDetectorPort)
+        state = mock.get_cluster_state()
+        assert isinstance(state, RaftClusterState)
+
+    def test_contract_get_cluster_state_returns_raft_cluster_state(self) -> None:
+        """Test that get_cluster_state() returns RaftClusterState."""
+
+        class TestDetector:
+            def get_cluster_state(self) -> RaftClusterState:
+                return RaftClusterState(
+                    nodes=[RaftNodeState(node_id="test-node", is_leader=True)]
+                )
+
+        detector = TestDetector()
+        state = detector.get_cluster_state()
+
+        assert isinstance(state, RaftClusterState)
+        assert hasattr(state, "nodes")
+        assert isinstance(state.nodes, list)
+
+    def test_get_cluster_state_single_leader(self) -> None:
+        """Test get_cluster_state with healthy cluster (single leader)."""
+
+        class HealthyDetector:
+            def get_cluster_state(self) -> RaftClusterState:
+                return RaftClusterState(
+                    nodes=[
+                        RaftNodeState(node_id="node-1", is_leader=True),
+                        RaftNodeState(node_id="node-2", is_leader=False),
+                        RaftNodeState(node_id="node-3", is_leader=False),
+                    ]
+                )
+
+        detector = HealthyDetector()
+        assert isinstance(detector, SplitBrainDetectorPort)
+
+        state = detector.get_cluster_state()
+        assert state.count_leaders() == 1
+        assert state.has_single_leader() is True
+        assert len(state.nodes) == 3
+
+    def test_get_cluster_state_multiple_leaders_split_brain(self) -> None:
+        """Test get_cluster_state detecting split-brain (multiple leaders)."""
+
+        class SplitBrainDetector:
+            def get_cluster_state(self) -> RaftClusterState:
+                # Simulate split-brain: two nodes think they're leaders
+                return RaftClusterState(
+                    nodes=[
+                        RaftNodeState(node_id="node-1", is_leader=True),
+                        RaftNodeState(node_id="node-2", is_leader=True),
+                        RaftNodeState(node_id="node-3", is_leader=False),
+                    ]
+                )
+
+        detector = SplitBrainDetector()
+        assert isinstance(detector, SplitBrainDetectorPort)
+
+        state = detector.get_cluster_state()
+        assert state.count_leaders() == 2
+        assert state.has_single_leader() is False
+        leader_nodes = state.get_leader_nodes()
+        assert len(leader_nodes) == 2
+        assert all(node.is_leader for node in leader_nodes)
+
+    def test_get_cluster_state_no_leaders(self) -> None:
+        """Test get_cluster_state edge case with no leaders."""
+
+        class NoLeaderDetector:
+            def get_cluster_state(self) -> RaftClusterState:
+                # All nodes are replicas, no leader (cluster issue)
+                return RaftClusterState(
+                    nodes=[
+                        RaftNodeState(node_id="node-1", is_leader=False),
+                        RaftNodeState(node_id="node-2", is_leader=False),
+                        RaftNodeState(node_id="node-3", is_leader=False),
+                    ]
+                )
+
+        detector = NoLeaderDetector()
+        assert isinstance(detector, SplitBrainDetectorPort)
+
+        state = detector.get_cluster_state()
+        assert state.count_leaders() == 0
+        assert state.has_single_leader() is False
+        assert len(state.get_leader_nodes()) == 0
+        assert len(state.get_replica_nodes()) == 3
