@@ -1,0 +1,4 @@
+# file: /Users/philipphematty/Projects/django-litefs/packages/litefs-django/src/litefs_django/db/backends/litefs/base.py
+# hypothesis_version: 6.148.7
+
+['COMMIT', 'Connection', 'IMMEDIATE', 'NAME', 'OPTIONS', 'db.sqlite3', 'default', 'isolation_level', 'litefs_mount_path', 'transaction_mode']

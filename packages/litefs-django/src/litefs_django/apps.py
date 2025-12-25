@@ -7,6 +7,7 @@ from django.apps import AppConfig
 from django.conf import settings as django_settings
 
 from litefs_django.settings import get_litefs_settings
+from litefs.usecases.mount_validator import MountValidator
 from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningError
 
 logger = logging.getLogger(__name__)
@@ -38,11 +39,14 @@ class LiteFSDjangoConfig(AppConfig):
             # Convert Django settings to domain object (validates settings)
             litefs_settings = get_litefs_settings(litefs_config)
 
-            # Check if LiteFS mount path exists
+            # Check if LiteFS mount path exists using MountValidator
             mount_path = Path(litefs_settings.mount_path)
-            if not mount_path.exists():
+            validator = MountValidator()
+            try:
+                validator.validate(mount_path)
+            except Exception as e:
                 logger.warning(
-                    f"LiteFS mount path does not exist: {mount_path}. "
+                    f"LiteFS mount path validation failed: {e}. "
                     "LiteFS may not be running or mounted."
                 )
                 return
@@ -61,6 +65,7 @@ class LiteFSDjangoConfig(AppConfig):
             logger.error(f"Failed to validate LiteFS settings: {e}")
             # Don't raise - allow Django to start even if LiteFS config is invalid
             # Application will fail when trying to use database backend
+
 
 
 

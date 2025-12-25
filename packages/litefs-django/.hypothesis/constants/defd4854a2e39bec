@@ -1,0 +1,4 @@
+# file: /Users/philipphematty/Projects/django-litefs/packages/litefs/src/litefs/usecases/sql_detector.py
+# hypothesis_version: 6.148.7
+
+['--[^\\n]*(\\n|$)', '/\\*.*?\\*/', '=', 'ALTER', 'ANALYZE', 'ATTACH', 'CREATE', 'DELETE', 'DETACH', 'DROP', 'INSERT', 'PRAGMA', 'REINDEX', 'RELEASE', 'REPLACE', 'ROLLBACK', 'SAVEPOINT', 'UPDATE', 'VACUUM', 'WITH', '\\1']

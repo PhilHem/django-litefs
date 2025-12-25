@@ -70,3 +70,26 @@ def fake_primary_detector():
                 cursor.execute("INSERT ...")
     """
     return FakePrimaryDetector()
+
+
+@pytest.fixture
+def django_settings_reset():
+    """Reset Django settings to original state after test.
+
+    Saves original settings, allows modification during test, restores on teardown.
+    Useful for tests that modify Django settings.
+
+    Example:
+        def test_settings_modification(django_settings_reset):
+            from django.conf import settings
+            settings.SOME_SETTING = "new_value"
+            # Test code here
+            # Settings will be restored automatically
+    """
+    from django.conf import settings
+    from django.test import override_settings
+
+    # Use Django's override_settings context manager for proper isolation
+    # This handles unpicklable objects and module references correctly
+    with override_settings():
+        yield

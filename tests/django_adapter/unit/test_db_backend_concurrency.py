@@ -30,83 +30,20 @@ def create_litefs_settings_dict(mount_path, db_name="test.db"):
     }
 
 
-# Import write detection logic directly to test thread safety
+# Import SQLDetector to test thread safety
 # This avoids needing full Django setup for this specific test
-import re
+from litefs.usecases.sql_detector import SQLDetector
 
-# Pre-compiled regex for CTE write keyword detection (CONC-002)
-# Uses word boundaries to avoid false positives on column/table names
-# like 'delete_flag', 'update_count', 'insert_date', 'deleted_items'
-_CTE_WRITE_KEYWORD_RE = re.compile(r'\b(INSERT|UPDATE|DELETE)\b', re.IGNORECASE)
-
-
-def _strip_sql_comments(sql):
-    """Remove SQL comments for write detection (DJANGO-031)."""
-    # Remove block comments /* ... */ (non-greedy, handles nested)
-    sql = re.sub(r"/\*.*?\*/", "", sql, flags=re.DOTALL)
-    # Remove line comments -- ... (to end of line)
-    sql = re.sub(r"--[^\n]*(\n|$)", r"\1", sql)
-    return sql
+# Create a module-level detector instance for thread safety testing
+_sql_detector = SQLDetector()
 
 
 def _is_write_operation(sql):
-    """Check if SQL statement is a write operation (copied from LiteFSCursor for testing).
+    """Check if SQL statement is a write operation using SQLDetector.
 
-    Handles:
-    - Direct write keywords (INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, REPLACE)
-    - Database maintenance operations (VACUUM, REINDEX, ANALYZE) (DJANGO-030)
-    - ATTACH/DETACH DATABASE statements (SQL-001)
-    - SAVEPOINT/RELEASE/ROLLBACK statements (SQL-002)
-    - State-modifying PRAGMA statements (SQL-003)
-    - CTE patterns: WITH ... INSERT/UPDATE/DELETE (DJANGO-029, CONC-002)
-    - SQL with leading comments (DJANGO-031)
+    Delegates to SQLDetector for thread safety testing.
     """
-    if not sql:
-        return False
-
-    # Strip comments before detection (DJANGO-031)
-    sql_clean = _strip_sql_comments(sql)
-    sql_upper = sql_clean.strip().upper()
-
-    if not sql_upper:
-        return False
-
-    # Direct write keywords (existing + DJANGO-030 maintenance ops)
-    write_keywords = (
-        "INSERT",
-        "UPDATE",
-        "DELETE",
-        "CREATE",
-        "DROP",
-        "ALTER",
-        "REPLACE",
-        "VACUUM",
-        "REINDEX",
-        "ANALYZE",
-        # SQL-001: ATTACH/DETACH DATABASE
-        "ATTACH",
-        "DETACH",
-        # SQL-002: SAVEPOINT operations
-        "SAVEPOINT",
-        "RELEASE",
-        "ROLLBACK",
-    )
-
-    if any(sql_upper.startswith(keyword) for keyword in write_keywords):
-        return True
-
-    # SQL-003: PRAGMA write detection (only when assignment operator present)
-    # e.g., PRAGMA user_version = 1, PRAGMA schema_version = 1
-    if sql_upper.startswith("PRAGMA") and "=" in sql_clean:
-        return True
-
-    # CTE pattern detection (DJANGO-029, CONC-002): WITH ... INSERT/UPDATE/DELETE
-    # Uses word boundary regex to avoid false positives on column/table names
-    # like 'delete_flag', 'update_count', 'insert_date', 'deleted_items'
-    if sql_upper.startswith("WITH"):
-        return bool(_CTE_WRITE_KEYWORD_RE.search(sql_clean))
-
-    return False
+    return _sql_detector.is_write_operation(sql)
 
 
 @pytest.mark.unit

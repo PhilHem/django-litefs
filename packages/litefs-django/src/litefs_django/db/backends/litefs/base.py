@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -12,20 +11,13 @@ from django.db.backends.sqlite3.base import (
 )
 
 from litefs.adapters.ports import PrimaryDetectorPort
+from litefs.usecases.mount_validator import MountValidator
 from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningError
+from litefs.usecases.sql_detector import SQLDetector
 from litefs_django.exceptions import NotPrimaryError
 
 if TYPE_CHECKING:
     from sqlite3 import Connection
-
-# Pre-compiled regex patterns for SQL comment stripping (PERF-001)
-_BLOCK_COMMENT_RE = re.compile(r'/\*.*?\*/', re.DOTALL)
-_LINE_COMMENT_RE = re.compile(r'--[^\n]*(\n|$)')
-
-# Pre-compiled regex for CTE write keyword detection (CONC-002)
-# Uses word boundaries to avoid false positives on column/table names
-# like 'delete_flag', 'update_count', 'insert_date', 'deleted_items'
-_CTE_WRITE_KEYWORD_RE = re.compile(r'\b(INSERT|UPDATE|DELETE)\b', re.IGNORECASE)
 
 
 class LiteFSCursor(SQLite3Cursor):
@@ -43,6 +35,7 @@ class LiteFSCursor(SQLite3Cursor):
         """
         super().__init__(connection)
         self._primary_detector = primary_detector
+        self._sql_detector = SQLDetector()
 
     def _check_primary_before_write(self, sql):
         """Check if this node is primary before write operations.
@@ -53,7 +46,7 @@ class LiteFSCursor(SQLite3Cursor):
         Raises:
             NotPrimaryError: If this node is not primary (replica)
         """
-        if self._is_write_operation(sql):
+        if self._sql_detector.is_write_operation(sql):
             try:
                 if not self._primary_detector.is_primary():
                     raise NotPrimaryError(
@@ -65,83 +58,6 @@ class LiteFSCursor(SQLite3Cursor):
             except Exception:
                 # Re-raise other exceptions (e.g., LiteFSNotRunningError)
                 raise
-
-    def _strip_sql_comments(self, sql):
-        """Remove SQL comments for write detection (DJANGO-031).
-
-        Removes both block comments (/* ... */) and line comments (-- ...).
-        Uses pre-compiled regex patterns at module level (PERF-001, DJANGO-034).
-        """
-        # Remove block comments /* ... */ (non-greedy, handles nested)
-        sql = _BLOCK_COMMENT_RE.sub('', sql)
-        # Remove line comments -- ... (to end of line)
-        sql = _LINE_COMMENT_RE.sub(r'\1', sql)
-        return sql
-
-    def _is_write_operation(self, sql):
-        """Check if SQL statement is a write operation.
-
-        Handles:
-        - Direct write keywords (INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, REPLACE)
-        - Database maintenance operations (VACUUM, REINDEX, ANALYZE) (DJANGO-030)
-        - ATTACH/DETACH DATABASE statements (SQL-001)
-        - SAVEPOINT/RELEASE/ROLLBACK statements (SQL-002)
-        - State-modifying PRAGMA statements (SQL-003)
-        - CTE patterns: WITH ... INSERT/UPDATE/DELETE (DJANGO-029)
-        - SQL with leading comments (DJANGO-031)
-
-        Args:
-            sql: SQL statement string
-
-        Returns:
-            True if statement is a write operation
-        """
-        if not sql:
-            return False
-
-        # Strip comments before detection (DJANGO-031)
-        sql_clean = self._strip_sql_comments(sql)
-        sql_upper = sql_clean.strip().upper()
-
-        if not sql_upper:
-            return False
-
-        # Direct write keywords (existing + DJANGO-030 maintenance ops)
-        write_keywords = (
-            "INSERT",
-            "UPDATE",
-            "DELETE",
-            "CREATE",
-            "DROP",
-            "ALTER",
-            "REPLACE",
-            "VACUUM",
-            "REINDEX",
-            "ANALYZE",
-            # SQL-001: ATTACH/DETACH DATABASE
-            "ATTACH",
-            "DETACH",
-            # SQL-002: SAVEPOINT operations
-            "SAVEPOINT",
-            "RELEASE",
-            "ROLLBACK",
-        )
-
-        if any(sql_upper.startswith(keyword) for keyword in write_keywords):
-            return True
-
-        # SQL-003: PRAGMA write detection (only when assignment operator present)
-        # e.g., PRAGMA user_version = 1, PRAGMA schema_version = 1
-        if sql_upper.startswith("PRAGMA") and "=" in sql_clean:
-            return True
-
-        # CTE pattern detection (DJANGO-029, CONC-002): WITH ... INSERT/UPDATE/DELETE
-        # Uses word boundary regex to avoid false positives on column/table names
-        # like 'delete_flag', 'update_count', 'insert_date', 'deleted_items'
-        if sql_upper.startswith("WITH"):
-            return bool(_CTE_WRITE_KEYWORD_RE.search(sql_clean))
-
-        return False
 
     def execute(self, sql, params=None):
         """Execute SQL statement with primary check for write operations.
@@ -236,13 +152,10 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
         if not mount_path:
             raise ValueError("litefs_mount_path must be provided in OPTIONS")
 
-        # Validate mount_path exists (fail-fast) (DJANGO-027)
+        # Validate mount_path using MountValidator (fail-fast) (DJANGO-027)
         mount_path_obj = Path(mount_path)
-        if not mount_path_obj.exists():
-            raise LiteFSNotRunningError(
-                f"LiteFS mount path does not exist: {mount_path}. "
-                "LiteFS may not be running or mounted."
-            )
+        validator = MountValidator()
+        validator.validate(mount_path_obj)
 
         # Update database path to be in mount_path
         original_name = settings_dict.get("NAME", "db.sqlite3")
@@ -260,6 +173,9 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
             self._primary_detector = PrimaryDetector(mount_path)
         self._mount_path = mount_path
 
+        # Extract transaction mode from OPTIONS (default: IMMEDIATE)
+        self._transaction_mode = options.get("transaction_mode", "IMMEDIATE")
+
     def get_connection_params(self):
         """Get connection params without litefs_mount_path.
 
@@ -272,7 +188,7 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
         return params
 
     def get_new_connection(self, conn_params):
-        """Create new database connection with IMMEDIATE transaction mode.
+        """Create new database connection with configured transaction mode.
 
         Raises:
             LiteFSNotRunningError: If mount_path doesn't exist (DJANGO-025)
@@ -280,21 +196,18 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
         # Validate mount_path exists before attempting connection (DJANGO-025)
         # This provides clear error handling and prevents inconsistent error types
         mount_path_obj = Path(self._mount_path)
-        if not mount_path_obj.exists():
-            raise LiteFSNotRunningError(
-                f"LiteFS mount path does not exist: {self._mount_path}. "
-                "Cannot create database connection. LiteFS may not be running or mounted."
-            )
+        validator = MountValidator()
+        validator.validate(mount_path_obj)
 
-        # Set transaction mode to IMMEDIATE for better lock handling
+        # Set transaction mode to configured value (default: IMMEDIATE)
         conn_params.setdefault("isolation_level", None)
         connection = super().get_new_connection(conn_params)
 
-        # Set IMMEDIATE transaction mode
+        # Set configured transaction mode
         cursor = connection.cursor()
         try:
             cursor.execute("PRAGMA journal_mode=WAL")  # LiteFS requires WAL
-            cursor.execute("BEGIN IMMEDIATE")
+            cursor.execute(f"BEGIN {self._transaction_mode}")
             cursor.execute("COMMIT")
         finally:
             cursor.close()
@@ -306,13 +219,14 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
         return LiteFSCursor(self.connection, self._primary_detector)
 
     def _start_transaction_under_autocommit(self):
-        """Start transaction with IMMEDIATE mode for better lock handling.
+        """Start transaction with configured mode for better lock handling.
 
-        Overrides Django's default BEGIN (DEFERRED) to use BEGIN IMMEDIATE,
-        which acquires a write lock immediately and prevents lock contention
-        under concurrent load. This is required for LiteFS's single-writer model.
+        Overrides Django's default BEGIN (DEFERRED) to use configured transaction mode
+        (default: IMMEDIATE), which acquires a write lock immediately and prevents lock
+        contention under concurrent load. This is required for LiteFS's single-writer model.
         """
-        self.cursor().execute("BEGIN IMMEDIATE")
+        self.cursor().execute(f"BEGIN {self._transaction_mode}")
+
 
 
 

@@ -251,46 +251,46 @@ class TestDatabaseBackend:
                 f"BEGIN IMMEDIATE not found. Found: {begin_statements}"
             )
 
-    def test_strip_sql_comments_uses_precompiled_regex(self):
-        """Test that _strip_sql_comments uses pre-compiled regex patterns (PERF-001).
+    def test_sql_detector_uses_precompiled_regex(self):
+        """Test that SQLDetector uses pre-compiled regex patterns (PERF-001).
 
-        Verifies that module-level compiled patterns _BLOCK_COMMENT_RE and
-        _LINE_COMMENT_RE exist and are used instead of re.sub() compiling on each call.
+        Verifies that SQLDetector uses module-level compiled patterns instead
+        of re.sub() compiling on each call.
         """
         import re
-        from litefs_django.db.backends.litefs import base
+        from litefs.usecases import sql_detector
 
-        # Check module-level compiled patterns exist
-        assert hasattr(base, "_BLOCK_COMMENT_RE"), (
+        # Check module-level compiled patterns exist in sql_detector module
+        assert hasattr(sql_detector, "_BLOCK_COMMENT_RE"), (
             "Module should have _BLOCK_COMMENT_RE compiled pattern"
         )
-        assert hasattr(base, "_LINE_COMMENT_RE"), (
+        assert hasattr(sql_detector, "_LINE_COMMENT_RE"), (
             "Module should have _LINE_COMMENT_RE compiled pattern"
         )
 
         # Verify they are compiled regex patterns
-        assert isinstance(base._BLOCK_COMMENT_RE, re.Pattern), (
+        assert isinstance(sql_detector._BLOCK_COMMENT_RE, re.Pattern), (
             "_BLOCK_COMMENT_RE should be a compiled regex pattern"
         )
-        assert isinstance(base._LINE_COMMENT_RE, re.Pattern), (
+        assert isinstance(sql_detector._LINE_COMMENT_RE, re.Pattern), (
             "_LINE_COMMENT_RE should be a compiled regex pattern"
         )
 
-    def test_re_module_imported_at_top(self):
-        """Test that re module is imported at module level (DJANGO-034).
+    def test_sql_detector_re_module_imported_at_top(self):
+        """Test that re module is imported at module level in SQLDetector (DJANGO-034).
 
-        Verifies that `import re` appears at module level in base.py,
+        Verifies that `import re` appears at module level in sql_detector.py,
         not inside a method body.
         """
-        from litefs_django.db.backends.litefs import base
+        from litefs.usecases.sql_detector import SQLDetector
         import inspect
 
-        # Get the source code of _strip_sql_comments method
-        source = inspect.getsource(base.LiteFSCursor._strip_sql_comments)
+        # Get the source code of strip_sql_comments method
+        source = inspect.getsource(SQLDetector.strip_sql_comments)
 
         # The method should NOT contain 'import re' inside its body
         assert "import re" not in source, (
-            "_strip_sql_comments should not import re inside method body. "
+            "strip_sql_comments should not import re inside method body. "
             "Import should be at module level."
         )
 
@@ -300,11 +300,11 @@ class TestWriteDetectionSqlOperations:
     """Test SQL write detection for additional operations (SQL-001, SQL-002, SQL-003)."""
 
     def _is_write(self, sql):
-        """Helper to call _is_write_operation on real implementation."""
-        from litefs_django.db.backends.litefs.base import LiteFSCursor
+        """Helper to call SQLDetector.is_write_operation on real implementation."""
+        from litefs.usecases.sql_detector import SQLDetector
 
-        cursor = LiteFSCursor.__new__(LiteFSCursor)
-        return cursor._is_write_operation(sql)
+        detector = SQLDetector()
+        return detector.is_write_operation(sql)
 
     # SQL-001: ATTACH/DETACH DATABASE
     def test_is_write_operation_attach_database(self):
@@ -352,3 +352,96 @@ class TestWriteDetectionSqlOperations:
     def test_is_write_operation_pragma_journal_mode_not_write(self):
         """Test PRAGMA journal_mode (read) is NOT detected as write (SQL-003)."""
         assert self._is_write("PRAGMA journal_mode") is False
+
+
+@pytest.mark.unit
+class TestTransactionModeConfiguration:
+    """Test configurable transaction mode."""
+
+    def test_transaction_mode_defaults_to_immediate(self):
+        """Test that transaction mode defaults to IMMEDIATE."""
+        import tempfile
+        from pathlib import Path
+        from litefs_django.db.backends.litefs.base import DatabaseWrapper
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mount_path = Path(tmpdir) / "litefs"
+            mount_path.mkdir()
+
+            settings_dict = {
+                "ENGINE": "litefs_django.db.backends.litefs",
+                "NAME": "test.db",
+                "OPTIONS": {
+                    "litefs_mount_path": str(mount_path),
+                },
+            }
+
+            wrapper = DatabaseWrapper(settings_dict)
+            # Default should be IMMEDIATE
+            assert wrapper._transaction_mode == "IMMEDIATE"
+
+    def test_transaction_mode_can_be_configured(self):
+        """Test that transaction mode can be configured via OPTIONS."""
+        import tempfile
+        from pathlib import Path
+        from litefs_django.db.backends.litefs.base import DatabaseWrapper
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mount_path = Path(tmpdir) / "litefs"
+            mount_path.mkdir()
+
+            settings_dict = {
+                "ENGINE": "litefs_django.db.backends.litefs",
+                "NAME": "test.db",
+                "OPTIONS": {
+                    "litefs_mount_path": str(mount_path),
+                    "transaction_mode": "DEFERRED",
+                },
+            }
+
+            wrapper = DatabaseWrapper(settings_dict)
+            assert wrapper._transaction_mode == "DEFERRED"
+
+    def test_transaction_mode_deferred(self):
+        """Test DEFERRED transaction mode option."""
+        import tempfile
+        from pathlib import Path
+        from litefs_django.db.backends.litefs.base import DatabaseWrapper
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mount_path = Path(tmpdir) / "litefs"
+            mount_path.mkdir()
+
+            settings_dict = {
+                "ENGINE": "litefs_django.db.backends.litefs",
+                "NAME": "test.db",
+                "OPTIONS": {
+                    "litefs_mount_path": str(mount_path),
+                    "transaction_mode": "DEFERRED",
+                },
+            }
+
+            wrapper = DatabaseWrapper(settings_dict)
+            assert wrapper._transaction_mode == "DEFERRED"
+
+    def test_transaction_mode_exclusive(self):
+        """Test EXCLUSIVE transaction mode option."""
+        import tempfile
+        from pathlib import Path
+        from litefs_django.db.backends.litefs.base import DatabaseWrapper
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mount_path = Path(tmpdir) / "litefs"
+            mount_path.mkdir()
+
+            settings_dict = {
+                "ENGINE": "litefs_django.db.backends.litefs",
+                "NAME": "test.db",
+                "OPTIONS": {
+                    "litefs_mount_path": str(mount_path),
+                    "transaction_mode": "EXCLUSIVE",
+                },
+            }
+
+            wrapper = DatabaseWrapper(settings_dict)
+            assert wrapper._transaction_mode == "EXCLUSIVE"
