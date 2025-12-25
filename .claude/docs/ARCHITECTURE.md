@@ -110,3 +110,6 @@ Decisions made via structured architecture review.
 - PBT required for config generation and settings validation
 - Deprecation warnings for at least one minor version before removal
 
+
+
+

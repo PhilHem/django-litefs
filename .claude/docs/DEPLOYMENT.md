@@ -67,3 +67,6 @@ LiteFS requires HTTP connectivity between nodes. Cross-network setups need exter
 
 **Recommended**: Use [Tailscale](https://tailscale.com/) for easy mesh VPN between nodes in different networks. This is out of scope for litefs-py—documented but not implemented.
 
+
+
+

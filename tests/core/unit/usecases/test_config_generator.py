@@ -196,6 +196,42 @@ fuse:
         with pytest.raises(LiteFSConfigError):
             parser.parse(incomplete_yaml)
 
+    def test_parse_empty_database_path_raises_config_error(self):
+        """Test that empty database path raises LiteFSConfigError (PARSE-001)."""
+        yaml_config = """
+fuse:
+  dir: /litefs
+data:
+  dir: /var/lib/litefs
+databases:
+  - path: ""
+lease:
+  type: static
+"""
+        from litefs.usecases.config_parser import ConfigParser
+
+        parser = ConfigParser()
+        with pytest.raises(LiteFSConfigError, match="database path"):
+            parser.parse(yaml_config)
+
+    def test_parse_whitespace_database_path_raises_config_error(self):
+        """Test that whitespace-only database path raises LiteFSConfigError (PARSE-001)."""
+        yaml_config = """
+fuse:
+  dir: /litefs
+data:
+  dir: /var/lib/litefs
+databases:
+  - path: "   "
+lease:
+  type: static
+"""
+        from litefs.usecases.config_parser import ConfigParser
+
+        parser = ConfigParser()
+        with pytest.raises(LiteFSConfigError, match="database path"):
+            parser.parse(yaml_config)
+
 
 @pytest.mark.unit
 @pytest.mark.property
@@ -333,4 +369,7 @@ class TestConfigDeterminism:
 
         # All outputs should be byte-identical
         assert yaml1 == yaml2 == yaml3
+
+
+
 

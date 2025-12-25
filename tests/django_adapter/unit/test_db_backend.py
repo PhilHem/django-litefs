@@ -293,3 +293,62 @@ class TestDatabaseBackend:
             "_strip_sql_comments should not import re inside method body. "
             "Import should be at module level."
         )
+
+
+@pytest.mark.unit
+class TestWriteDetectionSqlOperations:
+    """Test SQL write detection for additional operations (SQL-001, SQL-002, SQL-003)."""
+
+    def _is_write(self, sql):
+        """Helper to call _is_write_operation on real implementation."""
+        from litefs_django.db.backends.litefs.base import LiteFSCursor
+
+        cursor = LiteFSCursor.__new__(LiteFSCursor)
+        return cursor._is_write_operation(sql)
+
+    # SQL-001: ATTACH/DETACH DATABASE
+    def test_is_write_operation_attach_database(self):
+        """Test ATTACH DATABASE is detected as write (SQL-001)."""
+        assert self._is_write("ATTACH DATABASE ':memory:' AS temp") is True
+
+    def test_is_write_operation_detach_database(self):
+        """Test DETACH DATABASE is detected as write (SQL-001)."""
+        assert self._is_write("DETACH DATABASE temp") is True
+
+    def test_is_write_operation_attach_with_path(self):
+        """Test ATTACH DATABASE with path is detected as write (SQL-001)."""
+        assert self._is_write("ATTACH DATABASE '/path/to/db.sqlite3' AS other") is True
+
+    # SQL-002: SAVEPOINT operations
+    def test_is_write_operation_savepoint(self):
+        """Test SAVEPOINT is detected as write (SQL-002)."""
+        assert self._is_write("SAVEPOINT my_savepoint") is True
+
+    def test_is_write_operation_release_savepoint(self):
+        """Test RELEASE SAVEPOINT is detected as write (SQL-002)."""
+        assert self._is_write("RELEASE SAVEPOINT my_savepoint") is True
+
+    def test_is_write_operation_rollback_to_savepoint(self):
+        """Test ROLLBACK TO SAVEPOINT is detected as write (SQL-002)."""
+        assert self._is_write("ROLLBACK TO SAVEPOINT my_savepoint") is True
+
+    # SQL-003: State-modifying PRAGMAs
+    def test_is_write_operation_pragma_user_version_write(self):
+        """Test PRAGMA user_version = N is detected as write (SQL-003)."""
+        assert self._is_write("PRAGMA user_version = 1") is True
+
+    def test_is_write_operation_pragma_schema_version_write(self):
+        """Test PRAGMA schema_version = N is detected as write (SQL-003)."""
+        assert self._is_write("PRAGMA schema_version = 1") is True
+
+    def test_is_write_operation_pragma_application_id_write(self):
+        """Test PRAGMA application_id = N is detected as write (SQL-003)."""
+        assert self._is_write("PRAGMA application_id = 12345") is True
+
+    def test_is_write_operation_pragma_read_only_not_write(self):
+        """Test PRAGMA read (no assignment) is NOT detected as write (SQL-003)."""
+        assert self._is_write("PRAGMA user_version") is False
+
+    def test_is_write_operation_pragma_journal_mode_not_write(self):
+        """Test PRAGMA journal_mode (read) is NOT detected as write (SQL-003)."""
+        assert self._is_write("PRAGMA journal_mode") is False

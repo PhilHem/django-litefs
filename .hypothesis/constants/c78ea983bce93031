@@ -1,0 +1,4 @@
+# file: /Users/philipphematty/Projects/django-litefs/packages/litefs-django/src/litefs_django/db/backends/litefs/base.py
+# hypothesis_version: 6.148.7
+
+['--[^\\n]*(\\n|$)', '/\\*.*?\\*/', '=', 'ALTER', 'ANALYZE', 'ATTACH', 'BEGIN IMMEDIATE', 'COMMIT', 'CREATE', 'DELETE', 'DETACH', 'DROP', 'INSERT', 'NAME', 'OPTIONS', 'PRAGMA', 'REINDEX', 'RELEASE', 'REPLACE', 'ROLLBACK', 'SAVEPOINT', 'UPDATE', 'VACUUM', 'WITH', '\\1', 'db.sqlite3', 'default', 'isolation_level', 'litefs_mount_path']

@@ -209,3 +209,62 @@ class TestSettingsReader:
         }
         with pytest.raises(LiteFSConfigError, match="leader_election"):
             get_litefs_settings(django_settings)
+
+    def test_missing_required_field_raises_config_error(self):
+        """Test that missing a single required field raises LiteFSConfigError (PROP-002)."""
+        # Missing MOUNT_PATH
+        django_settings = {
+            "DATA_PATH": "/var/lib/litefs",
+            "DATABASE_NAME": "db.sqlite3",
+            "LEADER_ELECTION": "static",
+            "PROXY_ADDR": ":8080",
+            "ENABLED": True,
+            "RETENTION": "1h",
+        }
+        with pytest.raises(LiteFSConfigError, match="MOUNT_PATH"):
+            get_litefs_settings(django_settings)
+
+    def test_missing_multiple_required_fields_lists_all(self):
+        """Test that missing multiple required fields lists all of them (PROP-002)."""
+        # Missing MOUNT_PATH and DATA_PATH
+        django_settings = {
+            "DATABASE_NAME": "db.sqlite3",
+            "LEADER_ELECTION": "static",
+            "PROXY_ADDR": ":8080",
+            "ENABLED": True,
+            "RETENTION": "1h",
+        }
+        with pytest.raises(LiteFSConfigError) as exc_info:
+            get_litefs_settings(django_settings)
+        error_message = str(exc_info.value)
+        assert "DATA_PATH" in error_message
+        assert "MOUNT_PATH" in error_message
+
+    def test_empty_dict_raises_config_error_with_all_required_fields(self):
+        """Test that empty dict raises LiteFSConfigError listing all 7 required fields (PROP-002)."""
+        django_settings = {}
+        with pytest.raises(LiteFSConfigError) as exc_info:
+            get_litefs_settings(django_settings)
+        error_message = str(exc_info.value)
+        # All 7 required fields should be mentioned
+        for field in ["MOUNT_PATH", "DATA_PATH", "DATABASE_NAME", "LEADER_ELECTION",
+                      "PROXY_ADDR", "ENABLED", "RETENTION"]:
+            assert field in error_message, f"Expected {field} in error message"
+
+    def test_unknown_keys_are_silently_ignored(self):
+        """Test that unknown Django settings keys are silently ignored (PROP-001 - intended behavior)."""
+        django_settings = {
+            "MOUNT_PATH": "/litefs",
+            "DATA_PATH": "/var/lib/litefs",
+            "DATABASE_NAME": "db.sqlite3",
+            "LEADER_ELECTION": "static",
+            "PROXY_ADDR": ":8080",
+            "ENABLED": True,
+            "RETENTION": "1h",
+            "UNKNOWN_KEY": "should be ignored",
+            "ANOTHER_UNKNOWN": 12345,
+        }
+        # Should not raise - unknown keys are silently ignored
+        settings = get_litefs_settings(django_settings)
+        assert settings.mount_path == "/litefs"
+        assert settings.enabled is True

@@ -21,11 +21,11 @@ Project is in initial development phase. Core architecture and framework adapter
 
 **Goal:** Deliver a minimal viable product with core LiteFS integration and Django adapter support.
 
-- [x] TASK-CORE-001 - Implement `litefs-py` core: settings, config generation, primary detection (fixes CORE-001, CORE-011, CORE-012, CORE-015; wontfix CORE-005, CORE-006, CORE-007, CORE-008, CORE-009, CORE-016)
-- [x] TASK-DJANGO-001 - Implement `litefs-django` adapter: settings reader, DB backend (fixes DJANGO-001, DJANGO-002, DJANGO-006, DJANGO-007, DJANGO-008, DJANGO-009, DJANGO-010, DJANGO-014, DJANGO-020, DJANGO-021, DJANGO-022, DJANGO-028, DJANGO-029, DJANGO-030, DJANGO-031, DJANGO-033, DJANGO-034, PERF-001, CONC-002; wontfix DJANGO-003, DJANGO-032, CONC-001, CONC-003)
-- [ ] TASK-RAFT-001 - Implement static leader election (manual failover, 2-node minimum)
+- [x] TASK-CORE-001 - Implement `litefs-py` core: settings, config generation, primary detection (fixes CORE-001, CORE-011, CORE-012, CORE-015, PARSE-001; wontfix CORE-005, CORE-006, CORE-007, CORE-008, CORE-009, CORE-016, PARSE-002)
+- [x] TASK-DJANGO-001 - Implement `litefs-django` adapter: settings reader, DB backend (fixes DJANGO-001, DJANGO-002, DJANGO-006, DJANGO-007, DJANGO-008, DJANGO-009, DJANGO-010, DJANGO-014, DJANGO-020, DJANGO-021, DJANGO-022, DJANGO-028, DJANGO-029, DJANGO-030, DJANGO-031, DJANGO-033, DJANGO-034, PERF-001, CONC-002, SQL-001, SQL-002, SQL-003, PROP-002; wontfix DJANGO-003, DJANGO-032, CONC-001, CONC-003, CONC-004, SQL-004, SQL-005, CONC-005, CONC-006, SQL-007, SQL-008, SQL-009, SQL-010, PROP-001)
+- [ ] TASK-RAFT-001 - Implement static leader election (manual failover, 2-node minimum) (prerequisite issues fixed: RAFT-001, RAFT-002, RAFT-003, RAFT-004, RAFT-005, RAFT-006, RAFT-007)
 - [ ] TASK-CMD-001 - Create management commands (status, check)
-- [x] TASK-TEST-001 - Write unit tests with in-memory adapters (concurrency tests added: Django backend - DJANGO-012, DJANGO-015, DJANGO-016, DJANGO-017, DJANGO-018, DJANGO-019, DJANGO-004, DJANGO-023, DJANGO-005, DJANGO-024, DJANGO-025, DJANGO-026, DJANGO-027; PrimaryDetector - CORE-002, CORE-013, CORE-014; property-based tests added: path sanitization - CORE-003-PBT, YAML generation - CORE-004, config determinism - CORE-010)
+- [x] TASK-TEST-001 - Write unit tests with in-memory adapters (fixes ARCH-001, RAFT-001, RAFT-002, RAFT-003, RAFT-004, RAFT-005, RAFT-006, RAFT-007; concurrency tests added: Django backend - DJANGO-012, DJANGO-015, DJANGO-016, DJANGO-017, DJANGO-018, DJANGO-019, DJANGO-004, DJANGO-023, DJANGO-005, DJANGO-024, DJANGO-025, DJANGO-026, DJANGO-027; PrimaryDetector - CORE-002, CORE-013, CORE-014; property-based tests added: path sanitization - CORE-003-PBT, YAML generation - CORE-004, config determinism - CORE-010, SQL parsing - RAFT-005, RAFT-006)
 - [ ] TASK-EXAM-001 - Create example Django app in `examples/django-app/`
 
 **Outcome:** A working Django application with LiteFS replication support, manual failover capability, and basic management tooling.

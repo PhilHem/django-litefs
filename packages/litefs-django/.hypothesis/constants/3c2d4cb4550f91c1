@@ -1,0 +1,4 @@
+# file: /Users/philipphematty/Projects/django-litefs/packages/litefs/src/litefs/usecases/config_parser.py
+# hypothesis_version: 6.148.7
+
+['LiteFSSettings', 'addr', 'data', 'databases', 'dir', 'fuse', 'lease', 'path', 'proxy', 'type']

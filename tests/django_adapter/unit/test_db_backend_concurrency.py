@@ -55,6 +55,9 @@ def _is_write_operation(sql):
     Handles:
     - Direct write keywords (INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, REPLACE)
     - Database maintenance operations (VACUUM, REINDEX, ANALYZE) (DJANGO-030)
+    - ATTACH/DETACH DATABASE statements (SQL-001)
+    - SAVEPOINT/RELEASE/ROLLBACK statements (SQL-002)
+    - State-modifying PRAGMA statements (SQL-003)
     - CTE patterns: WITH ... INSERT/UPDATE/DELETE (DJANGO-029, CONC-002)
     - SQL with leading comments (DJANGO-031)
     """
@@ -80,9 +83,21 @@ def _is_write_operation(sql):
         "VACUUM",
         "REINDEX",
         "ANALYZE",
+        # SQL-001: ATTACH/DETACH DATABASE
+        "ATTACH",
+        "DETACH",
+        # SQL-002: SAVEPOINT operations
+        "SAVEPOINT",
+        "RELEASE",
+        "ROLLBACK",
     )
 
     if any(sql_upper.startswith(keyword) for keyword in write_keywords):
+        return True
+
+    # SQL-003: PRAGMA write detection (only when assignment operator present)
+    # e.g., PRAGMA user_version = 1, PRAGMA schema_version = 1
+    if sql_upper.startswith("PRAGMA") and "=" in sql_clean:
         return True
 
     # CTE pattern detection (DJANGO-029, CONC-002): WITH ... INSERT/UPDATE/DELETE
@@ -96,8 +111,14 @@ def _is_write_operation(sql):
 
 @pytest.mark.unit
 @pytest.mark.concurrency
+@pytest.mark.no_parallel
 class TestDatabaseBackendConcurrency:
-    """Test concurrency issues in Django database backend."""
+    """Test concurrency issues in Django database backend.
+
+    Marked no_parallel because these tests:
+    - Use threading with shared filesystem state
+    - Have tight timing requirements that can fail under pytest-xdist
+    """
 
     def test_primary_detector_concurrent_access(self, tmp_path):
         """Test that PrimaryDetector handles concurrent is_primary() calls safely.
@@ -1162,6 +1183,63 @@ class TestWriteDetectionGaps:
         """
         assert _is_write_operation(sql) is True, (
             "CTE with actual DELETE should still be detected as write"
+        )
+
+    # SQL-007: WITH RECURSIVE CTE pattern tests
+    def test_is_write_operation_cte_recursive_insert(self):
+        """Test WITH RECURSIVE CTE with INSERT is detected as write (SQL-007)."""
+        sql = """
+        WITH RECURSIVE cte(n) AS (
+            SELECT 1
+            UNION ALL
+            SELECT n+1 FROM cte WHERE n < 100
+        )
+        INSERT INTO numbers SELECT * FROM cte
+        """
+        assert _is_write_operation(sql) is True, (
+            "WITH RECURSIVE CTE with INSERT should be detected as write"
+        )
+
+    def test_is_write_operation_cte_recursive_update(self):
+        """Test WITH RECURSIVE CTE with UPDATE is detected as write (SQL-007)."""
+        sql = """
+        WITH RECURSIVE hierarchy AS (
+            SELECT id, parent_id, 0 as level FROM nodes WHERE parent_id IS NULL
+            UNION ALL
+            SELECT n.id, n.parent_id, h.level + 1 FROM nodes n JOIN hierarchy h ON n.parent_id = h.id
+        )
+        UPDATE nodes SET depth = (SELECT level FROM hierarchy WHERE hierarchy.id = nodes.id)
+        """
+        assert _is_write_operation(sql) is True, (
+            "WITH RECURSIVE CTE with UPDATE should be detected as write"
+        )
+
+    def test_is_write_operation_cte_recursive_delete(self):
+        """Test WITH RECURSIVE CTE with DELETE is detected as write (SQL-007)."""
+        sql = """
+        WITH RECURSIVE descendants AS (
+            SELECT id FROM categories WHERE id = 1
+            UNION ALL
+            SELECT c.id FROM categories c JOIN descendants d ON c.parent_id = d.id
+        )
+        DELETE FROM categories WHERE id IN (SELECT id FROM descendants)
+        """
+        assert _is_write_operation(sql) is True, (
+            "WITH RECURSIVE CTE with DELETE should be detected as write"
+        )
+
+    def test_is_write_operation_cte_recursive_select_only(self):
+        """Test WITH RECURSIVE CTE with SELECT only is NOT detected as write (SQL-007)."""
+        sql = """
+        WITH RECURSIVE fibonacci(n, a, b) AS (
+            SELECT 1, 0, 1
+            UNION ALL
+            SELECT n+1, b, a+b FROM fibonacci WHERE n < 50
+        )
+        SELECT a FROM fibonacci
+        """
+        assert _is_write_operation(sql) is False, (
+            "WITH RECURSIVE CTE with SELECT only should not be detected as write"
         )
 
 

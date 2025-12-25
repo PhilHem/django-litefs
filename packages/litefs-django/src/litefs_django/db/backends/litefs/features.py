@@ -15,3 +15,6 @@ class DatabaseFeatures(SQLite3DatabaseFeatures):
     # LiteFS requires WAL mode (configured in get_new_connection)
     # All other features are the same as SQLite3
 
+
+
+

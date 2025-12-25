@@ -41,6 +41,10 @@ class ConfigParser:
         except (KeyError, IndexError, TypeError) as e:
             raise LiteFSConfigError(f"Missing required field in config: {e}") from e
 
+        # Validate database path is not empty (PARSE-001)
+        if not database_name or not database_name.strip():
+            raise LiteFSConfigError("database path cannot be empty")
+
         # Extract optional proxy.addr field (default to empty string)
         proxy_addr = ""
         if "proxy" in config and isinstance(config["proxy"], dict):
@@ -61,4 +65,7 @@ class ConfigParser:
             raft_self_addr=None,  # Optional field
             raft_peers=None,  # Optional field
         )
+
+
+
 

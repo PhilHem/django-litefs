@@ -1,15 +1,22 @@
 """LiteFS database backend base implementation."""
 
+from __future__ import annotations
+
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from django.db.backends.sqlite3.base import (
     DatabaseWrapper as SQLite3DatabaseWrapper,
     SQLiteCursorWrapper as SQLite3Cursor,
 )
 
+from litefs.adapters.ports import PrimaryDetectorPort
 from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningError
 from litefs_django.exceptions import NotPrimaryError
+
+if TYPE_CHECKING:
+    from sqlite3 import Connection
 
 # Pre-compiled regex patterns for SQL comment stripping (PERF-001)
 _BLOCK_COMMENT_RE = re.compile(r'/\*.*?\*/', re.DOTALL)
@@ -24,12 +31,15 @@ _CTE_WRITE_KEYWORD_RE = re.compile(r'\b(INSERT|UPDATE|DELETE)\b', re.IGNORECASE)
 class LiteFSCursor(SQLite3Cursor):
     """Cursor with primary detection for write operations."""
 
-    def __init__(self, connection, primary_detector):
+    def __init__(
+        self, connection: "Connection", primary_detector: PrimaryDetectorPort
+    ) -> None:
         """Initialize LiteFS cursor.
 
         Args:
             connection: Database connection
-            primary_detector: PrimaryDetector use case instance
+            primary_detector: PrimaryDetector use case instance (or any
+                implementation of PrimaryDetectorPort protocol)
         """
         super().__init__(connection)
         self._primary_detector = primary_detector
@@ -74,6 +84,9 @@ class LiteFSCursor(SQLite3Cursor):
         Handles:
         - Direct write keywords (INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, REPLACE)
         - Database maintenance operations (VACUUM, REINDEX, ANALYZE) (DJANGO-030)
+        - ATTACH/DETACH DATABASE statements (SQL-001)
+        - SAVEPOINT/RELEASE/ROLLBACK statements (SQL-002)
+        - State-modifying PRAGMA statements (SQL-003)
         - CTE patterns: WITH ... INSERT/UPDATE/DELETE (DJANGO-029)
         - SQL with leading comments (DJANGO-031)
 
@@ -105,9 +118,21 @@ class LiteFSCursor(SQLite3Cursor):
             "VACUUM",
             "REINDEX",
             "ANALYZE",
+            # SQL-001: ATTACH/DETACH DATABASE
+            "ATTACH",
+            "DETACH",
+            # SQL-002: SAVEPOINT operations
+            "SAVEPOINT",
+            "RELEASE",
+            "ROLLBACK",
         )
 
         if any(sql_upper.startswith(keyword) for keyword in write_keywords):
+            return True
+
+        # SQL-003: PRAGMA write detection (only when assignment operator present)
+        # e.g., PRAGMA user_version = 1, PRAGMA schema_version = 1
+        if sql_upper.startswith("PRAGMA") and "=" in sql_clean:
             return True
 
         # CTE pattern detection (DJANGO-029, CONC-002): WITH ... INSERT/UPDATE/DELETE
@@ -188,12 +213,21 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
     occurs during a transaction.
     """
 
-    def __init__(self, settings_dict, alias="default"):
+    def __init__(
+        self,
+        settings_dict: dict,
+        alias: str = "default",
+        *,
+        primary_detector: PrimaryDetectorPort | None = None,
+    ) -> None:
         """Initialize LiteFS database backend.
 
         Args:
             settings_dict: Django database settings dict
             alias: Database alias
+            primary_detector: Optional PrimaryDetector instance for dependency
+                injection. If not provided, a new PrimaryDetector is created.
+                Use this for testing with FakePrimaryDetector.
         """
         # Extract LiteFS mount path from OPTIONS
         options = settings_dict.get("OPTIONS", {})
@@ -218,9 +252,12 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
         # Initialize parent SQLite3 backend (Django 5.x)
         super().__init__(settings_dict, alias=alias)
 
-        # Create PrimaryDetector use case (Clean Architecture: delegate to use case)
-        # Mount path validation already done above (fail-fast)
-        self._primary_detector = PrimaryDetector(mount_path)
+        # Use injected detector or create PrimaryDetector use case
+        # (Clean Architecture: delegate to use case, allow DI for testing)
+        if primary_detector is not None:
+            self._primary_detector: PrimaryDetectorPort = primary_detector
+        else:
+            self._primary_detector = PrimaryDetector(mount_path)
         self._mount_path = mount_path
 
     def get_connection_params(self):
@@ -276,4 +313,7 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
         under concurrent load. This is required for LiteFS's single-writer model.
         """
         self.cursor().execute("BEGIN IMMEDIATE")
+
+
+
 

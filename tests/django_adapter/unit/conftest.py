@@ -4,31 +4,37 @@ import os
 
 import pytest
 
-# Set Django settings module before any Django imports
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "django.conf.global_settings")
+from .fakes import FakePrimaryDetector
 
-try:
-    import django
-    from django.conf import settings
 
-    # Configure Django settings if not already configured
-    if not settings.configured:
-        settings.configure(
-            DEBUG=True,
-            DATABASES={
-                "default": {
-                    "ENGINE": "django.db.backends.sqlite3",
-                    "NAME": ":memory:",
-                }
-            },
-            INSTALLED_APPS=[],
-            USE_TZ=True,
-            SECRET_KEY="test-secret-key-for-unit-tests",
-        )
-        django.setup()
-except ImportError:
-    # Django not available - tests will skip
-    pass
+@pytest.fixture(scope="session", autouse=True)
+def _configure_django():
+    """Configure Django once per test session."""
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "django.conf.global_settings")
+
+    try:
+        import django
+        from django.conf import settings
+
+        if not settings.configured:
+            settings.configure(
+                DEBUG=True,
+                DATABASES={
+                    "default": {
+                        "ENGINE": "django.db.backends.sqlite3",
+                        "NAME": ":memory:",
+                    }
+                },
+                INSTALLED_APPS=[],
+                USE_TZ=True,
+                SECRET_KEY="test-secret-key-for-unit-tests",
+            )
+            django.setup()
+
+        yield
+    except ImportError:
+        # Django not available - tests will skip
+        yield
 
 
 def create_litefs_settings_dict(mount_path, db_name="test.db"):
@@ -48,3 +54,19 @@ def create_litefs_settings_dict(mount_path, db_name="test.db"):
             "litefs_mount_path": str(mount_path),
         },
     }
+
+
+@pytest.fixture
+def fake_primary_detector():
+    """Provide FakePrimaryDetector for unit tests.
+
+    Use instead of mocking PrimaryDetector for cleaner, faster tests.
+
+    Example:
+        def test_write_on_replica(fake_primary_detector):
+            fake_primary_detector.set_primary(False)
+            cursor = LiteFSCursor(conn, fake_primary_detector)
+            with pytest.raises(NotPrimaryError):
+                cursor.execute("INSERT ...")
+    """
+    return FakePrimaryDetector()

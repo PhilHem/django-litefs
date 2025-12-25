@@ -2,7 +2,22 @@
 
 from typing import Any
 
+from litefs.domain.exceptions import LiteFSConfigError
 from litefs.domain.settings import LiteFSSettings
+
+# Required fields that must be present in Django settings
+_REQUIRED_FIELDS = (
+    "MOUNT_PATH",
+    "DATA_PATH",
+    "DATABASE_NAME",
+    "LEADER_ELECTION",
+    "PROXY_ADDR",
+    "ENABLED",
+    "RETENTION",
+)
+
+# Optional fields that default to None if not provided
+_OPTIONAL_FIELDS = ("RAFT_SELF_ADDR", "RAFT_PEERS")
 
 
 def get_litefs_settings(django_settings: dict[str, Any]) -> LiteFSSettings:
@@ -17,8 +32,15 @@ def get_litefs_settings(django_settings: dict[str, Any]) -> LiteFSSettings:
         LiteFSSettings domain object
 
     Raises:
-        LiteFSConfigError: If settings are invalid (delegates to domain validation)
+        LiteFSConfigError: If required settings are missing or invalid
     """
+    # Validate required fields first (PROP-002)
+    missing = [key for key in _REQUIRED_FIELDS if key not in django_settings]
+    if missing:
+        raise LiteFSConfigError(
+            f"Missing required LiteFS settings: {', '.join(sorted(missing))}"
+        )
+
     # Map UPPER_CASE Django keys to snake_case domain fields
     field_mapping = {
         "MOUNT_PATH": "mount_path",
@@ -37,10 +59,13 @@ def get_litefs_settings(django_settings: dict[str, Any]) -> LiteFSSettings:
     for django_key, domain_field in field_mapping.items():
         if django_key in django_settings:
             kwargs[domain_field] = django_settings[django_key]
-        elif domain_field in ("raft_self_addr", "raft_peers"):
+        elif django_key in _OPTIONAL_FIELDS:
             # Optional fields default to None if not provided
             kwargs[domain_field] = None
 
     # Create domain object (validation happens in __post_init__)
     return LiteFSSettings(**kwargs)
+
+
+
 
