@@ -6,6 +6,7 @@ from litefs.adapters.ports import (
     PrimaryDetectorPort,
     LeaderElectionPort,
     RaftLeaderElectionPort,
+    SplitBrainDetectorPort,
 )
 from litefs.adapters.raft_leader_election_adapter import RaftLeaderElectionAdapter
 
@@ -16,6 +17,7 @@ __all__ = [
     "LeaderElectionPort",
     "RaftLeaderElectionPort",
     "RaftLeaderElectionAdapter",
+    "SplitBrainDetectorPort",
 ]
 
 

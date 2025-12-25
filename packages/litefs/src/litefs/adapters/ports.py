@@ -7,7 +7,10 @@ These are Protocol classes (structural subtyping) for flexible testing.
 from __future__ import annotations
 
 import os
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from litefs.domain.split_brain import RaftClusterState
 
 
 @runtime_checkable
@@ -172,6 +175,39 @@ class RaftLeaderElectionPort(LeaderElectionPort, Protocol):
 
         Returns:
             True if quorum is reached, False otherwise.
+        """
+        ...
+
+
+@runtime_checkable
+class SplitBrainDetectorPort(Protocol):
+    """Port interface for split-brain detection.
+
+    Implementations provide cluster state information that allows the
+    SplitBrainDetector use case to identify when multiple nodes claim
+    leadership (split-brain scenario).
+
+    A split-brain occurs when network partition causes cluster consensus
+    to break down, resulting in multiple nodes believing they are the leader.
+    This port allows detection of such scenarios so applications can take
+    corrective action (e.g., demoting extra leaders, alerting operators).
+
+    Contract:
+        - get_cluster_state() returns a RaftClusterState with all node states
+        - The RaftClusterState must contain valid node leadership information
+        - Implementations may query network state, consensus logs, or heartbeat status
+    """
+
+    def get_cluster_state(self) -> RaftClusterState:
+        """Get the current state of all nodes in the cluster.
+
+        Returns:
+            A RaftClusterState object containing the state of all nodes
+            in the cluster, including their node IDs and leadership status.
+
+        Raises:
+            May raise exceptions if cluster state cannot be determined
+            (e.g., network unavailable, consensus lost).
         """
         ...
 
