@@ -8,7 +8,8 @@ from litefs.usecases.split_brain_detector import SplitBrainStatus
 from litefs_django.signals import split_brain_detected
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 class TestSplitBrainSignals:
     """Test split-brain detection signals."""
 

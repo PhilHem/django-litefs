@@ -10,7 +10,8 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 class TestLitefsAvailableFixture:
     """Test litefs_available fixture implementation."""
 
@@ -89,7 +90,8 @@ class TestLitefsAvailableFixture:
         )
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 class TestSkipIfNoLitefsFixture:
     """Test skip_if_no_litefs fixture."""
 
@@ -108,7 +110,8 @@ class TestSkipIfNoLitefsFixture:
         )
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 class TestIntegrationTestStructure:
     """Test integration test file structure."""
 

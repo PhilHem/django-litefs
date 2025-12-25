@@ -12,7 +12,8 @@ import litefs_django
 from litefs_django.apps import LiteFSDjangoConfig
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 class TestAppConfig:
     """Test LiteFS Django AppConfig."""
 

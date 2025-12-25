@@ -7,7 +7,8 @@ from litefs.domain.health import HealthStatus
 from litefs.domain.exceptions import LiteFSConfigError
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant")
 class TestHealthStatus:
     """Test HealthStatus value object."""
 
@@ -86,8 +87,8 @@ class TestHealthStatus:
             assert status.state == state
 
 
-@pytest.mark.unit
-@pytest.mark.property
+@pytest.mark.tier(3)
+@pytest.mark.tra("Domain.Invariant")
 class TestHealthStatusPBT:
     """Property-based tests for HealthStatus."""
 

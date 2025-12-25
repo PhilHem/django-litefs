@@ -47,10 +47,11 @@ write_keywords = st.sampled_from([
 _test_detector = SQLDetector()
 
 
+@pytest.mark.tra("Adapter")
 class TestStripSqlCommentsProperties:
     """RAFT-005: Property-based tests for strip_sql_comments()."""
 
-    @pytest.mark.property
+    @pytest.mark.tier(3)
     @given(sql=st.text(max_size=200))
     @settings(max_examples=100)
     def test_strip_comments_idempotent(self, sql: str):
@@ -59,7 +60,7 @@ class TestStripSqlCommentsProperties:
         twice = _test_detector.strip_sql_comments(once)
         assert once == twice, f"Not idempotent: strip('{sql}') = '{once}', strip again = '{twice}'"
 
-    @pytest.mark.property
+    @pytest.mark.tier(3)
     @given(
         prefix=st.text(alphabet="SELECT FROM WHERE ", max_size=20),
         comment=st.text(max_size=50),
@@ -79,7 +80,7 @@ class TestStripSqlCommentsProperties:
         assert "/*" not in result, f"Block comment start still present in: {result}"
         assert "*/" not in result, f"Block comment end still present in: {result}"
 
-    @pytest.mark.property
+    @pytest.mark.tier(3)
     @given(
         prefix=st.text(alphabet="SELECT FROM WHERE ", max_size=20),
         comment=st.text(alphabet="comment text here", max_size=30),
@@ -96,7 +97,7 @@ class TestStripSqlCommentsProperties:
         # The -- and comment should be gone, but newline preserved
         assert "--" not in result, f"Line comment marker still present in: {result}"
 
-    @pytest.mark.property
+    @pytest.mark.tier(3)
     @given(sql=st.text(alphabet=" \t\n", max_size=20))
     @settings(max_examples=50)
     def test_strip_comments_preserves_whitespace_only(self, sql: str):
@@ -106,10 +107,11 @@ class TestStripSqlCommentsProperties:
         assert result == sql
 
 
+@pytest.mark.tra("Adapter")
 class TestIsWriteOperationProperties:
     """RAFT-006: Property-based tests for is_write_operation()."""
 
-    @pytest.mark.property
+    @pytest.mark.tier(3)
     @given(keyword=write_keywords)
     @settings(max_examples=50)
     def test_write_keywords_case_insensitive(self, keyword: str):
@@ -127,7 +129,7 @@ class TestIsWriteOperationProperties:
             assert _test_detector.is_write_operation(sql_lower) is True, f"Failed for: {sql_lower}"
             assert _test_detector.is_write_operation(sql_mixed) is True, f"Failed for: {sql_mixed}"
 
-    @pytest.mark.property
+    @pytest.mark.tier(3)
     @given(sql=st.text(alphabet=" \t\n", max_size=20))
     @settings(max_examples=50)
     def test_empty_or_whitespace_not_write(self, sql: str):
@@ -135,7 +137,7 @@ class TestIsWriteOperationProperties:
         assert _test_detector.is_write_operation(sql) is False
         assert _test_detector.is_write_operation("") is False
 
-    @pytest.mark.property
+    @pytest.mark.tier(3)
     @given(column_name=sql_like_names)
     @settings(max_examples=50)
     def test_cte_word_boundary_no_false_positives(self, column_name: str):
@@ -146,7 +148,7 @@ class TestIsWriteOperationProperties:
             f"False positive: '{column_name}' in SELECT was detected as write"
         )
 
-    @pytest.mark.property
+    @pytest.mark.tier(3)
     @given(
         cte_name=sql_identifier,
         keyword=st.sampled_from(["INSERT", "UPDATE", "DELETE"]),
@@ -157,7 +159,7 @@ class TestIsWriteOperationProperties:
         sql = f"WITH {cte_name} AS (SELECT 1) {keyword} INTO test VALUES (1)"
         assert _test_detector.is_write_operation(sql) is True, f"CTE write not detected: {sql}"
 
-    @pytest.mark.property
+    @pytest.mark.tier(3)
     @given(cte_name=sql_identifier)
     @settings(max_examples=50)
     def test_cte_select_not_write(self, cte_name: str):
@@ -165,7 +167,7 @@ class TestIsWriteOperationProperties:
         sql = f"WITH {cte_name} AS (SELECT 1) SELECT * FROM {cte_name}"
         assert _test_detector.is_write_operation(sql) is False, f"CTE SELECT falsely detected as write: {sql}"
 
-    @pytest.mark.property
+    @pytest.mark.tier(3)
     @given(
         comment=st.text(alphabet="abcdefghijklmnopqrstuvwxyz ", max_size=30),
         keyword=st.sampled_from(["INSERT", "UPDATE", "DELETE"]),
@@ -178,7 +180,7 @@ class TestIsWriteOperationProperties:
         sql = f"/*{comment}*/ {keyword} INTO test VALUES (1)"
         assert _test_detector.is_write_operation(sql) is True, f"Write after comment not detected: {sql}"
 
-    @pytest.mark.property
+    @pytest.mark.tier(3)
     @given(
         comment=st.text(alphabet="abcdefghijklmnopqrstuvwxyz ", max_size=30),
         keyword=st.sampled_from(["INSERT", "UPDATE", "DELETE"]),
@@ -192,10 +194,11 @@ class TestIsWriteOperationProperties:
         assert _test_detector.is_write_operation(sql) is True, f"Write after line comment not detected: {sql}"
 
 
+@pytest.mark.tra("Adapter")
 class TestPragmaWriteDetection:
     """Additional tests for PRAGMA write detection."""
 
-    @pytest.mark.property
+    @pytest.mark.tier(3)
     @given(pragma_name=sql_identifier, value=st.integers(min_value=0, max_value=1000))
     @settings(max_examples=50)
     def test_pragma_with_assignment_is_write(self, pragma_name: str, value: int):
@@ -203,7 +206,7 @@ class TestPragmaWriteDetection:
         sql = f"PRAGMA {pragma_name} = {value}"
         assert _test_detector.is_write_operation(sql) is True, f"PRAGMA assignment not detected: {sql}"
 
-    @pytest.mark.property
+    @pytest.mark.tier(3)
     @given(pragma_name=sql_identifier)
     @settings(max_examples=50)
     def test_pragma_without_assignment_not_write(self, pragma_name: str):

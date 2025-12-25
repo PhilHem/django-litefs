@@ -46,9 +46,9 @@ def _is_write_operation(sql):
     return _sql_detector.is_write_operation(sql)
 
 
-@pytest.mark.unit
-@pytest.mark.concurrency
+@pytest.mark.tier(2)
 @pytest.mark.no_parallel
+@pytest.mark.tra("Adapter")
 class TestDatabaseBackendConcurrency:
     """Test concurrency issues in Django database backend.
 
@@ -927,7 +927,8 @@ class TestDatabaseBackendConcurrency:
         ), f"Error message should clearly indicate mount path issue: {exc_info.value}"
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 class TestWriteDetectionGaps:
     """Test write detection gaps (DJANGO-029, DJANGO-030, DJANGO-031)."""
 
@@ -1180,7 +1181,8 @@ class TestWriteDetectionGaps:
         )
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 class TestExecutescriptOverride:
     """Test executescript method override (DJANGO-028)."""
 
@@ -1255,7 +1257,8 @@ class TestExecutescriptOverride:
         assert result[0] == 2
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 class TestPrimaryDetectorLifecycle:
     """Test PrimaryDetector lifecycle across cursor operations (DJANGO-032)."""
 

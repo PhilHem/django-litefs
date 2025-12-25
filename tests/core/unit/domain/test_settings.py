@@ -7,7 +7,8 @@ from hypothesis import given, strategies as st
 from litefs.domain.settings import LiteFSSettings, LiteFSConfigError
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant")
 class TestLiteFSSettings:
     """Test LiteFSSettings domain entity."""
 
@@ -265,8 +266,8 @@ class TestLiteFSSettings:
         assert len(settings.raft_peers) == 8
 
 
-@pytest.mark.unit
-@pytest.mark.property
+@pytest.mark.tier(3)
+@pytest.mark.tra("Domain.Invariant")
 class TestDatabaseNameValidationPBT:
     """Property-based tests for database_name validation."""
 
@@ -311,8 +312,8 @@ class TestDatabaseNameValidationPBT:
             )
 
 
-@pytest.mark.unit
-@pytest.mark.property
+@pytest.mark.tier(3)
+@pytest.mark.tra("Domain.Invariant")
 class TestRaftConfigValidationPBT:
     """Property-based tests for Raft configuration validation."""
 
@@ -406,8 +407,8 @@ class TestRaftConfigValidationPBT:
             )
 
 
-@pytest.mark.unit
-@pytest.mark.property
+@pytest.mark.tier(3)
+@pytest.mark.tra("Domain.Invariant")
 class TestPathSanitizationPBT:
     """Property-based tests for path sanitization edge cases."""
 

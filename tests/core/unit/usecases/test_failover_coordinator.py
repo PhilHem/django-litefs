@@ -31,7 +31,8 @@ class MockLeaderElectionPort:
         self.is_elected = False
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("UseCase")
 class TestFailoverCoordinator:
     """Test FailoverCoordinator use case."""
 
@@ -229,7 +230,8 @@ class MockRaftLeaderElectionPort(MockLeaderElectionPort):
         return self.quorum_reached
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("UseCase")
 class TestFailoverCoordinatorQuorum:
     """Test FailoverCoordinator quorum-aware failover logic."""
 
@@ -324,7 +326,8 @@ class TestFailoverCoordinatorQuorum:
         assert coordinator.can_maintain_leadership() is False
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("UseCase")
 class TestFailoverCoordinatorHealthIntegration:
     """Test FailoverCoordinator health-aware failover logic."""
 
@@ -385,8 +388,8 @@ class TestFailoverCoordinatorHealthIntegration:
         assert coordinator.is_healthy() == initial_health
 
 
-@pytest.mark.unit
-@pytest.mark.property
+@pytest.mark.tier(3)
+@pytest.mark.tra("UseCase")
 class TestFailoverCoordinatorPBT:
     """Property-based tests for FailoverCoordinator."""
 

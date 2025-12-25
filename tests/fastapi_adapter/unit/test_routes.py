@@ -70,14 +70,16 @@ def client(test_app: FastAPI) -> TestClient:
     return TestClient(test_app)
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 def test_health_endpoint_returns_200_ok(client: TestClient) -> None:
     """Test that health endpoint returns 200 OK status."""
     response = client.get("/health")
     assert response.status_code == 200
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 def test_health_endpoint_includes_split_brain_status(client: TestClient) -> None:
     """Test that response includes is_split_brain field."""
     response = client.get("/health")
@@ -86,7 +88,8 @@ def test_health_endpoint_includes_split_brain_status(client: TestClient) -> None
     assert isinstance(data["is_split_brain"], bool)
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 def test_health_endpoint_includes_leader_nodes(client: TestClient) -> None:
     """Test that response includes leader_nodes list."""
     response = client.get("/health")
@@ -99,7 +102,8 @@ def test_health_endpoint_includes_leader_nodes(client: TestClient) -> None:
     assert data["leader_nodes"][0]["is_leader"] is True
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 def test_health_endpoint_includes_health_status(client: TestClient) -> None:
     """Test that response includes health state field."""
     response = client.get("/health")
@@ -108,7 +112,8 @@ def test_health_endpoint_includes_health_status(client: TestClient) -> None:
     assert data["health_state"] in ("healthy", "unhealthy", "degraded")
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 def test_health_endpoint_with_split_brain_detected(
     health_checker: HealthChecker, fake_split_brain_detector_port: Mock
 ) -> None:
@@ -141,7 +146,8 @@ def test_health_endpoint_with_split_brain_detected(
     assert data["leader_nodes"][1]["node_id"] == "node-2"
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 def test_health_endpoint_with_no_split_brain(
     health_checker: HealthChecker, fake_split_brain_detector_port: Mock
 ) -> None:
@@ -172,7 +178,8 @@ def test_health_endpoint_with_no_split_brain(
     assert data["health_state"] == "healthy"
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 def test_health_endpoint_with_degraded_health(
     fake_primary_detector_port: Mock, fake_split_brain_detector_port: Mock
 ) -> None:
@@ -198,7 +205,8 @@ def test_health_endpoint_with_degraded_health(
     assert data["is_split_brain"] is False
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 def test_health_endpoint_with_unhealthy_status(
     fake_primary_detector_port: Mock, fake_split_brain_detector_port: Mock
 ) -> None:

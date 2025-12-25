@@ -9,7 +9,8 @@ from litefs.domain.health import HealthStatus
 from litefs.adapters.ports import PrimaryDetectorPort
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("UseCase")
 class TestHealthChecker:
     """Test HealthChecker use case."""
 
@@ -164,8 +165,8 @@ class TestHealthChecker:
         assert status == HealthStatus(state="healthy")
 
 
-@pytest.mark.unit
-@pytest.mark.property
+@pytest.mark.tier(3)
+@pytest.mark.tra("UseCase")
 class TestHealthCheckerPBT:
     """Property-based tests for HealthChecker."""
 

@@ -7,7 +7,8 @@ from litefs.domain.raft import RaftSettings, QuorumPolicy
 from litefs.domain.exceptions import LiteFSConfigError
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant")
 class TestRaftSettings:
     """Test RaftSettings value object."""
 
@@ -187,8 +188,8 @@ class TestRaftSettings:
         assert len(settings_set) == 2  # settings1 and settings2 are equal
 
 
-@pytest.mark.unit
-@pytest.mark.property
+@pytest.mark.tier(3)
+@pytest.mark.tra("Domain.Invariant")
 class TestRaftSettingsPBT:
     """Property-based tests for RaftSettings."""
 
@@ -274,7 +275,8 @@ class TestRaftSettingsPBT:
         assert hash(settings1) == hash(settings2)
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant")
 class TestQuorumPolicy:
     """Test QuorumPolicy value object."""
 
@@ -424,8 +426,8 @@ class TestQuorumPolicy:
         assert policy.heartbeat_interval_ms == 100
 
 
-@pytest.mark.unit
-@pytest.mark.property
+@pytest.mark.tier(3)
+@pytest.mark.tra("Domain.Invariant")
 class TestQuorumPolicyPBT:
     """Property-based tests for QuorumPolicy."""
 

@@ -49,9 +49,9 @@ class MockSplitBrainDetectorPort:
             self.cluster_state = cluster_state
 
 
-@pytest.mark.unit
-@pytest.mark.concurrency
+@pytest.mark.tier(2)
 @pytest.mark.no_parallel
+@pytest.mark.tra("UseCase")
 class TestSplitBrainDetectorConcurrency:
     """Test SplitBrainDetector thread-safety with concurrent access.
 

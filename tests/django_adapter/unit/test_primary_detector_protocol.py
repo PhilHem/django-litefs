@@ -16,10 +16,11 @@ import pytest
 from litefs.usecases.primary_detector import PrimaryDetector
 
 
+@pytest.mark.tra("Adapter")
 class TestPrimaryDetectorProtocolExists:
     """RAFT-001: Verify Protocol interface exists and is implemented."""
 
-    @pytest.mark.unit
+    @pytest.mark.tier(1)
     def test_primary_detector_port_protocol_exists(self):
         """Protocol PrimaryDetectorPort should exist in adapters.ports."""
         from litefs.adapters.ports import PrimaryDetectorPort
@@ -29,7 +30,7 @@ class TestPrimaryDetectorProtocolExists:
             PrimaryDetectorPort, type
         )
 
-    @pytest.mark.unit
+    @pytest.mark.tier(1)
     def test_primary_detector_port_has_is_primary_method(self):
         """Protocol should define is_primary() -> bool method."""
         from litefs.adapters.ports import PrimaryDetectorPort
@@ -37,7 +38,7 @@ class TestPrimaryDetectorProtocolExists:
         # Check method signature via Protocol attributes or introspection
         assert hasattr(PrimaryDetectorPort, "is_primary")
 
-    @pytest.mark.unit
+    @pytest.mark.tier(1)
     def test_primary_detector_implements_protocol(self, tmp_path):
         """PrimaryDetector should implement PrimaryDetectorPort."""
         from litefs.adapters.ports import PrimaryDetectorPort
@@ -54,7 +55,7 @@ class TestPrimaryDetectorProtocolExists:
         result = detector.is_primary()
         assert isinstance(result, bool)
 
-    @pytest.mark.unit
+    @pytest.mark.tier(1)
     def test_fake_primary_detector_implements_protocol(self):
         """FakePrimaryDetector should implement PrimaryDetectorPort."""
         from litefs.adapters.ports import PrimaryDetectorPort
@@ -72,10 +73,11 @@ class TestPrimaryDetectorProtocolExists:
         assert isinstance(result, bool)
 
 
+@pytest.mark.tra("Adapter")
 class TestFakePrimaryDetectorSignature:
     """RAFT-001: Verify FakePrimaryDetector signature compatibility."""
 
-    @pytest.mark.unit
+    @pytest.mark.tier(1)
     def test_fake_accepts_mount_path_parameter(self):
         """FakePrimaryDetector should accept optional mount_path for compatibility."""
         from .fakes import FakePrimaryDetector
@@ -97,10 +99,11 @@ class TestFakePrimaryDetectorSignature:
         assert fake4.is_primary() is False
 
 
+@pytest.mark.tra("Adapter")
 class TestDatabaseWrapperDependencyInjection:
     """RAFT-002: Verify DatabaseWrapper accepts injected primary_detector."""
 
-    @pytest.mark.unit
+    @pytest.mark.tier(1)
     def test_database_wrapper_accepts_primary_detector_param(self, tmp_path):
         """DatabaseWrapper.__init__ should accept optional primary_detector."""
         from litefs_django.db.backends.litefs.base import DatabaseWrapper
@@ -124,7 +127,7 @@ class TestDatabaseWrapperDependencyInjection:
         # Should use the injected detector
         assert wrapper._primary_detector is fake_detector
 
-    @pytest.mark.unit
+    @pytest.mark.tier(1)
     def test_database_wrapper_creates_detector_when_not_provided(self, tmp_path):
         """DatabaseWrapper creates PrimaryDetector when none injected."""
         from litefs_django.db.backends.litefs.base import DatabaseWrapper
@@ -145,7 +148,7 @@ class TestDatabaseWrapperDependencyInjection:
         assert wrapper._primary_detector is not None
         assert isinstance(wrapper._primary_detector, PrimaryDetector)
 
-    @pytest.mark.unit
+    @pytest.mark.tier(1)
     def test_cursor_uses_injected_detector(self, tmp_path):
         """LiteFSCursor should use the injected detector."""
         import sqlite3
@@ -172,10 +175,11 @@ class TestDatabaseWrapperDependencyInjection:
         conn.close()
 
 
+@pytest.mark.tra("Adapter")
 class TestLiteFSCursorTypeHints:
     """RAFT-007: Verify LiteFSCursor has proper type hints."""
 
-    @pytest.mark.unit
+    @pytest.mark.tier(1)
     def test_litefs_cursor_init_has_type_hints(self):
         """LiteFSCursor.__init__ should have type hints on parameters."""
         from litefs_django.db.backends.litefs.base import LiteFSCursor
@@ -188,7 +192,7 @@ class TestLiteFSCursorTypeHints:
             "LiteFSCursor.__init__ should have type hint for primary_detector"
         )
 
-    @pytest.mark.unit
+    @pytest.mark.tier(1)
     def test_litefs_cursor_primary_detector_hint_is_protocol(self):
         """primary_detector type hint should reference Protocol."""
         from litefs_django.db.backends.litefs.base import LiteFSCursor

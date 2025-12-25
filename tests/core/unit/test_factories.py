@@ -44,7 +44,8 @@ def make_static_settings() -> LiteFSSettings:
     )
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant")
 class TestCreateRaftLeaderElection:
     """Tests for create_raft_leader_election factory function."""
 
@@ -143,7 +144,8 @@ class TestCreateRaftLeaderElection:
             create_raft_leader_election(settings=settings, node_id="node1")
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant")
 class TestPyLeaderNotInstalledError:
     """Tests for PyLeaderNotInstalledError."""
 

@@ -7,7 +7,8 @@ import pytest
 from litefs.usecases.sql_detector import SQLDetector
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("UseCase")
 class TestSQLDetector:
     """Test SQL detection logic."""
 

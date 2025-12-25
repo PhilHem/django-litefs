@@ -10,7 +10,8 @@ from hypothesis import given, strategies as st, settings
 from py_leader import RaftLeaderElection
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant")
 class TestRaftLeaderElectionInitialization:
     """Test RaftLeaderElection initialization and validation."""
 
@@ -111,7 +112,8 @@ class TestRaftLeaderElectionInitialization:
             )
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant")
 class TestLeaderElectionProtocol:
     """Test LeaderElectionPort protocol implementation."""
 
@@ -176,7 +178,8 @@ class TestLeaderElectionProtocol:
         assert election.is_leader_elected() is False
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant")
 class TestRaftClusterManagement:
     """Test Raft-specific cluster management methods."""
 
@@ -243,7 +246,8 @@ class TestRaftClusterManagement:
         assert election.is_member_in_cluster("") is False
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant")
 class TestRaftTimingConfiguration:
     """Test Raft timing configuration methods."""
 
@@ -302,7 +306,8 @@ class TestRaftTimingConfiguration:
         assert election.get_heartbeat_interval() < election.get_election_timeout()
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant")
 class TestRaftQuorumLogic:
     """Test Raft quorum consensus logic."""
 
@@ -361,7 +366,8 @@ class TestRaftQuorumLogic:
         assert isinstance(result, bool)
 
 
-@pytest.mark.property
+@pytest.mark.tier(3)
+@pytest.mark.tra("Domain.Invariant")
 class TestQuorumInvariants:
     """Property-based tests for Raft quorum invariants."""
 
@@ -419,7 +425,8 @@ class TestQuorumInvariants:
         assert election.get_election_timeout() == election_timeout
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant")
 class TestProtocolCompliance:
     """Test that RaftLeaderElection satisfies the RaftLeaderElectionPort protocol."""
 

@@ -9,7 +9,8 @@ from litefs.domain.exceptions import LiteFSConfigError
 from litefs.usecases.config_generator import ConfigGenerator
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("UseCase")
 class TestConfigGenerator:
     """Test ConfigGenerator use case."""
 
@@ -101,7 +102,8 @@ class TestConfigGenerator:
         assert parsed["proxy"]["addr"] == "localhost:3000"
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("UseCase")
 class TestConfigParser:
     """Test ConfigParser use case."""
 
@@ -233,8 +235,8 @@ lease:
             parser.parse(yaml_config)
 
 
-@pytest.mark.unit
-@pytest.mark.property
+@pytest.mark.tier(3)
+@pytest.mark.tra("UseCase")
 class TestConfigRoundTrip:
     """Property-based tests for config round-trip idempotence."""
 
@@ -292,8 +294,8 @@ class TestConfigRoundTrip:
         assert parsed_settings.proxy_addr == settings.proxy_addr
 
 
-@pytest.mark.unit
-@pytest.mark.property
+@pytest.mark.tier(3)
+@pytest.mark.tra("UseCase")
 class TestYAMLGenerationPBT:
     """Property-based tests for YAML generation validity."""
 
@@ -356,7 +358,8 @@ class TestYAMLGenerationPBT:
         assert parsed is not None
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("UseCase")
 class TestConfigDeterminism:
     """Tests for config output determinism."""
 

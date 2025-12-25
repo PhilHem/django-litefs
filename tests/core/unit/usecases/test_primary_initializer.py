@@ -7,7 +7,8 @@ from litefs.usecases.primary_initializer import PrimaryInitializer
 from litefs.domain.settings import StaticLeaderConfig
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("UseCase")
 class TestPrimaryInitializer:
     """Test PrimaryInitializer use case."""
 
@@ -91,8 +92,8 @@ class TestPrimaryInitializer:
         assert result3 is True  # Should return to True without side effects
 
 
-@pytest.mark.unit
-@pytest.mark.property
+@pytest.mark.tier(3)
+@pytest.mark.tra("UseCase")
 class TestPrimaryInitializerPBT:
     """Property-based tests for PrimaryInitializer."""
 

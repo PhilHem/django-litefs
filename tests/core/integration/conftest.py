@@ -358,3 +358,38 @@ def cluster_fixture(tmp_path: Path) -> Generator[ClusterFixture, None, None]:
     yield fixture
     # Ensure cleanup happens
     fixture.cleanup()
+
+
+@pytest.fixture
+def three_node_cluster_configured(
+    tmp_path: Path,
+) -> Generator[ClusterFixture, None, None]:
+    """Provide a pre-configured 3-node ClusterFixture for multi-node tests.
+
+    Creates a ClusterFixture with 3 nodes configured and docker-compose.yml
+    generated, but NOT started. Suitable for tests that need custom startup
+    sequences or partition testing.
+
+    Args:
+        tmp_path: Pytest's temporary directory fixture.
+
+    Yields:
+        Configured but not-yet-started ClusterFixture instance with 3 nodes.
+
+    Example:
+        @pytest.mark.integration
+        def test_quorum_leader_election(three_node_cluster_configured) -> None:
+            # Setup is already done, can start/stop as needed
+            three_node_cluster_configured.start()
+            assert three_node_cluster_configured.verify_health()
+            three_node_cluster_configured.cleanup()
+    """
+    fixture = ClusterFixture(
+        cluster_name="test-cluster-3node-config",
+        node_count=3,
+        base_dir=str(tmp_path / "cluster-3node"),
+    )
+    fixture.setup()
+    yield fixture
+    # Ensure cleanup happens
+    fixture.cleanup()

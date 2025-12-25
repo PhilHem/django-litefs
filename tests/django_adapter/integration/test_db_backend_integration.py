@@ -3,7 +3,8 @@
 import pytest
 
 
-@pytest.mark.integration
+@pytest.mark.tier(3)
+@pytest.mark.tra("Adapter")
 class TestDatabaseBackendIntegration:
     """Integration tests for LiteFS database backend.
 

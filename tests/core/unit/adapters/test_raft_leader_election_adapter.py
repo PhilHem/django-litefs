@@ -7,7 +7,8 @@ from litefs.adapters.raft_leader_election_adapter import RaftLeaderElectionAdapt
 from litefs.adapters.ports import LeaderElectionPort, RaftLeaderElectionPort
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Port")
 class TestRaftLeaderElectionAdapterProtocolCompliance:
     """Test that RaftLeaderElectionAdapter implements port protocols correctly."""
 
@@ -42,7 +43,8 @@ class TestRaftLeaderElectionAdapterProtocolCompliance:
         assert hasattr(adapter, "is_quorum_reached")
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Port")
 class TestRaftLeaderElectionAdapterConstructor:
     """Test RaftLeaderElectionAdapter constructor and initialization."""
 
@@ -66,7 +68,8 @@ class TestRaftLeaderElectionAdapterConstructor:
             RaftLeaderElectionAdapter()  # type: ignore
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Port")
 class TestRaftLeaderElectionAdapterDelegation:
     """Test that RaftLeaderElectionAdapter delegates to the wrapped port."""
 
@@ -231,7 +234,8 @@ class TestRaftLeaderElectionAdapterDelegation:
         mock_raft_port.is_quorum_reached.assert_called_once()
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Port")
 class TestRaftLeaderElectionAdapterCleanArchitecture:
     """Test that adapter follows Clean Architecture principles."""
 

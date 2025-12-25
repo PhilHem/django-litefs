@@ -13,7 +13,8 @@ from litefs.usecases.primary_detector import LiteFSNotRunningError, PrimaryDetec
 from .fakes import FakePrimaryDetector
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 class TestFakePrimaryDetectorContract:
     """Verify FakePrimaryDetector implements same interface as real."""
 

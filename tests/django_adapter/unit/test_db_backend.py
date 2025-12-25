@@ -14,7 +14,8 @@ from litefs_django.exceptions import NotPrimaryError, SplitBrainError
 from .conftest import create_litefs_settings_dict
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 class TestDatabaseBackend:
     """Test LiteFS database backend."""
 
@@ -298,7 +299,8 @@ class TestDatabaseBackend:
         )
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 class TestWriteDetectionSqlOperations:
     """Test SQL write detection for additional operations (SQL-001, SQL-002, SQL-003)."""
 
@@ -357,7 +359,8 @@ class TestWriteDetectionSqlOperations:
         assert self._is_write("PRAGMA journal_mode") is False
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 class TestTransactionModeConfiguration:
     """Test configurable transaction mode."""
 
@@ -450,7 +453,8 @@ class TestTransactionModeConfiguration:
             assert wrapper._transaction_mode == "EXCLUSIVE"
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 class TestSplitBrainDetectionInCursor:
     """Test split-brain detection in LiteFSCursor."""
 

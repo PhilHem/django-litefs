@@ -14,7 +14,8 @@ from litefs.adapters.ports import (
 from litefs.domain.split_brain import RaftClusterState, RaftNodeState
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Port")
 class TestNodeIDResolverPort:
     """Test NodeIDResolverPort protocol interface."""
 
@@ -35,7 +36,8 @@ class TestNodeIDResolverPort:
         assert isinstance(fake, NodeIDResolverPort)
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Port")
 class TestEnvironmentNodeIDResolver:
     """Test EnvironmentNodeIDResolver implementation."""
 
@@ -123,7 +125,8 @@ class TestEnvironmentNodeIDResolver:
         assert isinstance(resolver, NodeIDResolverPort)
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Port")
 class TestProtocolImplementationContract:
     """Test contract between protocol and implementations."""
 
@@ -157,7 +160,8 @@ class TestProtocolImplementationContract:
                 os.environ["LITEFS_NODE_ID"] = original
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Port")
 class TestLeaderElectionPort:
     """Test LeaderElectionPort protocol interface."""
 
@@ -184,7 +188,8 @@ class TestLeaderElectionPort:
         assert isinstance(fake, LeaderElectionPort)
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Port")
 class TestRaftLeaderElectionPort:
     """Test RaftLeaderElectionPort protocol interface."""
 
@@ -460,7 +465,7 @@ class TestRaftLeaderElectionPort:
         quorum = election.is_quorum_reached()
         assert isinstance(quorum, bool)
 
-    @pytest.mark.property
+    @pytest.mark.tier(3)
     @given(cluster_size=st.integers(min_value=1, max_value=10))
     @settings(max_examples=50)
     def test_quorum_invariant_majority_quorum(self, cluster_size: int) -> None:
@@ -517,7 +522,7 @@ class TestRaftLeaderElectionPort:
             election_above = TestRaftElection(cluster_size, quorum_threshold + 1)
             assert election_above.is_quorum_reached() is True
 
-    @pytest.mark.property
+    @pytest.mark.tier(3)
     @given(timeout_val=st.floats(min_value=0.1, max_value=10.0))
     @settings(max_examples=50)
     def test_timing_invariant_heartbeat_less_than_timeout(
@@ -565,7 +570,8 @@ class TestRaftLeaderElectionPort:
         assert heartbeat < election_timeout
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Port")
 class TestSplitBrainDetectorPort:
     """Test SplitBrainDetectorPort protocol interface."""
 

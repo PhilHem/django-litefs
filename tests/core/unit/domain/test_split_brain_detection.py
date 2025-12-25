@@ -7,7 +7,8 @@ from litefs.domain.split_brain import RaftNodeState, RaftClusterState
 from litefs.domain.exceptions import LiteFSConfigError
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant")
 class TestRaftNodeState:
     """Test RaftNodeState value object."""
 
@@ -73,8 +74,8 @@ class TestRaftNodeState:
         assert len(state_set) == 2  # state1 and state2 are equal
 
 
-@pytest.mark.unit
-@pytest.mark.property
+@pytest.mark.tier(3)
+@pytest.mark.tra("Domain.Invariant")
 class TestRaftNodeStatePBT:
     """Property-based tests for RaftNodeState."""
 
@@ -99,7 +100,8 @@ class TestRaftNodeStatePBT:
             RaftNodeState(node_id="   ", is_leader=is_leader)
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant")
 class TestRaftClusterState:
     """Test RaftClusterState value object."""
 
@@ -246,8 +248,8 @@ class TestRaftClusterState:
         assert len(cluster.get_replica_nodes()) == 0
 
 
-@pytest.mark.unit
-@pytest.mark.property
+@pytest.mark.tier(3)
+@pytest.mark.tra("Domain.Invariant")
 class TestRaftClusterStatePBT:
     """Property-based tests for RaftClusterState."""
 

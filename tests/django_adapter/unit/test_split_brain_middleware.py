@@ -9,7 +9,8 @@ from litefs.domain.split_brain import RaftNodeState, RaftClusterState
 from litefs.usecases.split_brain_detector import SplitBrainDetector, SplitBrainStatus
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 class TestSplitBrainMiddleware:
     """Test split-brain detection middleware."""
 

@@ -12,7 +12,8 @@ from litefs.usecases.failover_coordinator import NodeState
 from litefs_django.views import health_check_view
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 class TestHealthCheckView:
     """Test the health check endpoint."""
 

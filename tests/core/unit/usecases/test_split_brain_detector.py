@@ -25,7 +25,8 @@ class MockSplitBrainDetectorPort:
         return self.cluster_state
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("UseCase")
 class TestSplitBrainDetector:
     """Test SplitBrainDetector use case."""
 
@@ -196,7 +197,8 @@ class TestSplitBrainDetector:
         # Should execute without errors
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("UseCase")
 class TestSplitBrainStatus:
     """Test SplitBrainStatus value object."""
 
@@ -263,8 +265,8 @@ class TestSplitBrainStatus:
         assert status1 != status2
 
 
-@pytest.mark.unit
-@pytest.mark.property
+@pytest.mark.tier(3)
+@pytest.mark.tra("UseCase")
 class TestSplitBrainDetectorPBT:
     """Property-based tests for SplitBrainDetector."""
 

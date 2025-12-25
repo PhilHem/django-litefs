@@ -12,7 +12,8 @@ from litefs.usecases.mount_validator import MountValidator
 from litefs.usecases.primary_detector import LiteFSNotRunningError
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("UseCase")
 class TestMountValidator:
     """Test mount path validation logic."""
 

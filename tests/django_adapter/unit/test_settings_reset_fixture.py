@@ -3,7 +3,8 @@
 import pytest
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 class TestSettingsResetFixture:
     """Test Django settings reset fixture."""
 

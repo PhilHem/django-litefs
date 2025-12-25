@@ -6,7 +6,8 @@ from pathlib import Path
 from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningError
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("UseCase")
 class TestPrimaryDetector:
     """Test PrimaryDetector use case."""
 

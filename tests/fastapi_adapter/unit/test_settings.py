@@ -8,7 +8,8 @@ from litefs.domain.exceptions import LiteFSConfigError
 from litefs_fastapi.settings import get_litefs_settings
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 class TestFastAPISettingsReader:
     """Test FastAPI settings reader."""
 
@@ -101,7 +102,7 @@ class TestFastAPISettingsReader:
         with pytest.raises(LiteFSConfigError, match="path traversal"):
             get_litefs_settings(pydantic_settings)
 
-    @pytest.mark.property
+    @pytest.mark.tier(3)
     @given(
         mount_path=st.just("/litefs"),
         data_path=st.just("/var/lib/litefs"),
@@ -304,7 +305,8 @@ class TestFastAPISettingsReader:
         assert settings.enabled is True
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 class TestStaticLeaderConfigParsing:
     """Test parsing of static leader election configuration from Pydantic settings."""
 
@@ -450,7 +452,7 @@ class TestStaticLeaderConfigParsing:
         settings = get_litefs_settings(pydantic_settings)
         assert settings.static_leader_config.primary_hostname == "primary-node.example.com"
 
-    @pytest.mark.property
+    @pytest.mark.tier(3)
     @given(
         hostname=st.text(
             alphabet=st.characters(
@@ -479,7 +481,7 @@ class TestStaticLeaderConfigParsing:
         assert settings.static_leader_config is not None
         assert settings.static_leader_config.primary_hostname == hostname
 
-    @pytest.mark.property
+    @pytest.mark.tier(3)
     @given(
         hostname_base=st.text(
             alphabet=st.characters(min_codepoint=33, max_codepoint=126),
@@ -507,7 +509,8 @@ class TestStaticLeaderConfigParsing:
             get_litefs_settings(pydantic_settings)
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
 class TestZeroDjangoImports:
     """Test that FastAPI settings reader has zero Django imports."""
 

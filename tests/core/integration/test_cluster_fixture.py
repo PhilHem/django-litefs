@@ -8,6 +8,7 @@ import pytest
 from .conftest import ClusterFixture
 
 
+@pytest.mark.tra("Integration")
 class TestClusterFixtureBasic:
     """Test ClusterFixture basic functionality (no Docker required)."""
 
@@ -106,6 +107,7 @@ def skip_if_no_docker(litefs_available: bool) -> None:
         pytest.skip("Docker infrastructure not available")
 
 
+@pytest.mark.tra("Integration")
 class TestClusterFixture:
     """Test ClusterFixture infrastructure for multi-node Docker Compose.
 
@@ -113,7 +115,7 @@ class TestClusterFixture:
     cluster health, and cleans up properly after use.
     """
 
-    @pytest.mark.integration
+    @pytest.mark.tier(3)
     def test_cluster_fixture_instantiation(
         self, tmp_path: Path, skip_if_no_docker: None
     ) -> None:
@@ -133,7 +135,7 @@ class TestClusterFixture:
         assert fixture.base_dir == str(tmp_path)
         assert fixture.nodes == []  # No nodes started yet
 
-    @pytest.mark.integration
+    @pytest.mark.tier(3)
     def test_cluster_fixture_setup_and_teardown(
         self, tmp_path: Path, skip_if_no_docker: None
     ) -> None:
@@ -161,7 +163,7 @@ class TestClusterFixture:
 
         fixture.cleanup()
 
-    @pytest.mark.integration
+    @pytest.mark.tier(3)
     def test_cluster_fixture_docker_compose_validation(
         self, tmp_path: Path, skip_if_no_docker: None
     ) -> None:
@@ -197,7 +199,7 @@ class TestClusterFixture:
         finally:
             fixture.cleanup()
 
-    @pytest.mark.integration
+    @pytest.mark.tier(3)
     def test_cluster_fixture_node_count_generation(
         self, tmp_path: Path, skip_if_no_docker: None
     ) -> None:
@@ -227,7 +229,7 @@ class TestClusterFixture:
 
             fixture.cleanup()
 
-    @pytest.mark.integration
+    @pytest.mark.tier(3)
     def test_cluster_fixture_cleanup_removes_directory(
         self, tmp_path: Path, skip_if_no_docker: None
     ) -> None:
@@ -255,7 +257,7 @@ class TestClusterFixture:
             "cluster directory should be removed after cleanup"
         )
 
-    @pytest.mark.integration
+    @pytest.mark.tier(3)
     def test_cluster_fixture_health_verification_interface(
         self, tmp_path: Path, skip_if_no_docker: None
     ) -> None:
@@ -280,7 +282,7 @@ class TestClusterFixture:
 
         fixture.cleanup()
 
-    @pytest.mark.integration
+    @pytest.mark.tier(3)
     def test_cluster_fixture_multiple_instances_different_names(
         self, tmp_path: Path, skip_if_no_docker: None
     ) -> None:

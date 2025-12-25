@@ -19,8 +19,11 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 pythonpath = ["src"]
 markers = [
-    "unit: Unit tests (fast, no external dependencies)",
+    "unit: DEPRECATED - use tier(1) instead. Unit tests (fast, no external dependencies)",
     "property: Property-based tests",
+    "tier: Test tier level (1=unit, 2=concurrency, 3=integration/e2e)",
+    "no_parallel: Tests that cannot run in parallel (shared state/filesystem)",
+    "tra: Test Responsibility Architecture namespace marker",
 ]
 
 [dependency-groups]

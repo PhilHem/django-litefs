@@ -7,7 +7,8 @@ from litefs.domain.settings import StaticLeaderConfig
 from litefs.domain.exceptions import LiteFSConfigError
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant")
 class TestStaticLeaderConfig:
     """Test StaticLeaderConfig value object."""
 
@@ -100,8 +101,8 @@ class TestStaticLeaderConfig:
         assert len(config_set) == 2  # config1 and config2 are equal
 
 
-@pytest.mark.unit
-@pytest.mark.property
+@pytest.mark.tier(3)
+@pytest.mark.tra("Domain.Invariant")
 class TestStaticLeaderConfigPBT:
     """Property-based tests for StaticLeaderConfig."""
 
