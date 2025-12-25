@@ -6,6 +6,7 @@ from litefs.domain.settings import LiteFSSettings
 from litefs.domain.exceptions import LiteFSConfigError
 from litefs.usecases.config_generator import ConfigGenerator
 from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningError
+from litefs.factories import create_raft_leader_election, PyLeaderNotInstalledError
 
 __all__ = [
     "LiteFSSettings",
@@ -13,6 +14,8 @@ __all__ = [
     "ConfigGenerator",
     "PrimaryDetector",
     "LiteFSNotRunningError",
+    "create_raft_leader_election",
+    "PyLeaderNotInstalledError",
 ]
 
 

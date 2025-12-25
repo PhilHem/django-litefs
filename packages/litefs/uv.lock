@@ -126,6 +126,11 @@ dependencies = [
     { name = "pyyaml" },
 ]
 
+[package.optional-dependencies]
+raft = [
+    { name = "py-leader" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "hypothesis" },
@@ -134,7 +139,11 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pyyaml", specifier = ">=6.0.3" }]
+requires-dist = [
+    { name = "py-leader", marker = "extra == 'raft'", editable = "../py-leader" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
+]
+provides-extras = ["raft"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -226,6 +235,24 @@ wheels = [
 ]
 
 [[package]]
+name = "py-leader"
+version = "0.1.0"
+source = { editable = "../py-leader" }
+dependencies = [
+    { name = "pysyncobj" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pysyncobj", specifier = ">=0.3.12" }]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "hypothesis", specifier = ">=6.0.0" },
+    { name = "mypy", specifier = ">=1.11.0" },
+    { name = "pytest", specifier = ">=9.0.2" },
+]
+
+[[package]]
 name = "pygments"
 version = "2.19.2"
 source = { registry = "https://pypi.org/simple" }
@@ -233,6 +260,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/b0/77/a5b8c569bf593b014
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c7/21/705964c7812476f378728bdf590ca4b771ec72385c533964653c68e86bdc/pygments-2.19.2-py3-none-any.whl", hash = "sha256:86540386c03d588bb81d44bc3928634ff26449851e99741617ecb9037ee5ec0b", size = 1225217 },
 ]
+
+[[package]]
+name = "pysyncobj"
+version = "0.3.14"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9a/2f/2e295950426dac2eb59dc12eb7edf2f0ac8f24208751ac8e19e290a23129/pysyncobj-0.3.14.tar.gz", hash = "sha256:69d34e672257694f83f50dfb5e6e7ce446a68dba09ed48e142c782380d6428d4", size = 41583 }
 
 [[package]]
 name = "pytest"

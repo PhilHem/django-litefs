@@ -5,6 +5,10 @@ description = "Framework-agnostic LiteFS integration for Python"
 requires-python = ">=3.10"
 dependencies = ["pyyaml>=6.0.3"]
 
+[project.optional-dependencies]
+# Install with `pip install litefs-py[raft]` once py-leader is published to PyPI
+raft = ["py-leader>=0.1.0"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -27,3 +31,7 @@ markers = [
 
 [dependency-groups]
 dev = ["pytest>=9.0.2", "hypothesis>=6.0.0", "mypy>=1.11.0"]
+
+[tool.uv.sources]
+# For local development, py-leader is resolved from local path
+py-leader = { path = "../py-leader", editable = true }

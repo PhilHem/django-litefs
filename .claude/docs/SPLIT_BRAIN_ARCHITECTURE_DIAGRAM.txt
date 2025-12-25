@@ -1,0 +1,309 @@
+================================================================================
+SPLIT-BRAIN HANDLING IN LITEFS-PY HEXAGONAL ARCHITECTURE
+================================================================================
+
+CLEAN ARCHITECTURE LAYERS (Dependencies Point Inward Only)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+                            DOMAIN LAYER
+                    ┌──────────────────────────┐
+                    │   Value Objects:         │
+                    │   • RaftSettings         │
+                    │   • QuorumPolicy         │
+                    │                          │
+                    │   Exceptions:            │
+                    │   • LiteFSConfigError    │
+                    │   • SplitBrainDetected.. │
+                    └──────────────────────────┘
+                              △
+                              │ imports (zero external deps)
+                              │
+
+              APPLICATION LAYER (Use Cases)
+        ┌──────────────────────────────────────────┐
+        │  FailoverCoordinator (existing)           │
+        │  • coordinate_transition()                │
+        │  • depends: LeaderElectionPort           │
+        │                                          │
+        │  SplitBrainCoordinator (new)              │
+        │  • check_and_resolve_split_brain()       │
+        │  • depends on:                           │
+        │    - SplitBrainDetectorPort              │
+        │    - ConflictResolutionPort              │
+        │    - FailoverCoordinator (existing)      │
+        └──────────────────────────────────────────┘
+                              △
+                              │ implements
+                              │
+
+        ADAPTERS LAYER (Interface Adapters / Ports)
+        ┌─────────────────────────────────────────────────────────┐
+        │                                                         │
+        │  EXISTING PORTS:                                       │
+        │  ┌─────────────────────────────────────────────────┐   │
+        │  │ PrimaryDetectorPort                             │   │
+        │  │ • is_primary() -> bool                          │   │
+        │  └─────────────────────────────────────────────────┘   │
+        │                                                         │
+        │  ┌─────────────────────────────────────────────────┐   │
+        │  │ NodeIDResolverPort                              │   │
+        │  │ • resolve_node_id() -> str                      │   │
+        │  └─────────────────────────────────────────────────┘   │
+        │                                                         │
+        │  ┌─────────────────────────────────────────────────┐   │
+        │  │ LeaderElectionPort                              │   │
+        │  │ • is_leader_elected() -> bool                   │   │
+        │  │ • elect_as_leader() -> None                     │   │
+        │  │ • demote_from_leader() -> None                  │   │
+        │  └─────────────────────────────────────────────────┘   │
+        │                                                         │
+        │  ┌─────────────────────────────────────────────────┐   │
+        │  │ RaftLeaderElectionPort (extends above)          │   │
+        │  │ • get_cluster_members() -> list[str]            │   │
+        │  │ • is_member_in_cluster(id) -> bool              │   │
+        │  │ • get_election_timeout() -> float               │   │
+        │  │ • get_heartbeat_interval() -> float             │   │
+        │  │ • is_quorum_reached() -> bool ◄── QUERIED HERE │   │
+        │  └─────────────────────────────────────────────────┘   │
+        │                                                         │
+        │  NEW PORTS:                                            │
+        │  ┌─────────────────────────────────────────────────┐   │
+        │  │ SplitBrainDetectorPort  ◄── DETECTS PARTITION  │   │
+        │  │ • has_quorum() -> bool                          │   │
+        │  │ • can_commit_writes() -> bool                   │   │
+        │  │ • last_heartbeat_from(node_id) -> float         │   │
+        │  │ • detect_stale_leadership() -> bool             │   │
+        │  └─────────────────────────────────────────────────┘   │
+        │                                                         │
+        │  ┌─────────────────────────────────────────────────┐   │
+        │  │ ConflictResolutionPort  ◄── APPLIES FIX         │   │
+        │  │ • fence_write_access() -> None                  │   │
+        │  │ • apply_resolution_strategy(s) -> None          │   │
+        │  └─────────────────────────────────────────────────┘   │
+        │                                                         │
+        │  ┌─────────────────────────────────────────────────┐   │
+        │  │ HealthStatePort  ◄── IMPROVES QUORUM DETECTION │   │
+        │  │ • get_health_status() -> HealthStatus           │   │
+        │  │ • update_health(status) -> None                 │   │
+        │  └─────────────────────────────────────────────────┘   │
+        │                                                         │
+        │  EXISTING ADAPTERS:                                    │
+        │  ┌─────────────────────────────────────────────────┐   │
+        │  │ RaftLeaderElectionAdapter                       │   │
+        │  │ Wraps: py-leader implementation                 │   │
+        │  └─────────────────────────────────────────────────┘   │
+        │  ┌─────────────────────────────────────────────────┐   │
+        │  │ EnvironmentNodeIDResolver                       │   │
+        │  │ Reads: LITEFS_NODE_ID env var                  │   │
+        │  └─────────────────────────────────────────────────┘   │
+        │                                                         │
+        │  NEW ADAPTERS:                                         │
+        │  ┌─────────────────────────────────────────────────┐   │
+        │  │ SplitBrainDetectorAdapter                       │   │
+        │  │ Implements: SplitBrainDetectorPort              │   │
+        │  │ Depends on:                                      │   │
+        │  │ • RaftLeaderElectionPort (query quorum)         │   │
+        │  │ • NodeIDResolverPort (self-identification)      │   │
+        │  └─────────────────────────────────────────────────┘   │
+        │  ┌─────────────────────────────────────────────────┐   │
+        │  │ ConflictResolutionAdapter                       │   │
+        │  │ Implements: ConflictResolutionPort              │   │
+        │  │ Accesses: LiteFS mount (.primary file)          │   │
+        │  └─────────────────────────────────────────────────┘   │
+        │                                                         │
+        └─────────────────────────────────────────────────────────┘
+                              △
+                              │ wraps
+                              │
+
+        INFRASTRUCTURE LAYER (External Systems)
+        ┌─────────────────────────────────────────────────────────┐
+        │                                                         │
+        │  py-leader (Raft consensus)                           │
+        │  • Manages leader election                            │
+        │  • Maintains cluster membership                       │
+        │  • Tracks heartbeat/peer state                        │
+        │                                                         │
+        │  LiteFS (File System Replication)                     │
+        │  • Replicates SQLite to replicas                      │
+        │  • Reads .primary file for write fencing              │
+        │  • Mounts at /litefs                                  │
+        │                                                         │
+        │  Django / FastAPI (Framework)                         │
+        │  • Calls SplitBrainCoordinator from middleware        │
+        │  • Reports health status                              │
+        │                                                         │
+        └─────────────────────────────────────────────────────────┘
+
+
+================================================================================
+EXISTING VS. NEW COMPONENTS
+================================================================================
+
+EXISTING (No Changes):
+  ✓ LeaderElectionPort
+  ✓ RaftLeaderElectionPort  
+  ✓ RaftLeaderElectionAdapter
+  ✓ FailoverCoordinator
+  ✓ NodeIDResolverPort
+  ✓ EnvironmentNodeIDResolver
+
+NEW (Phase-by-Phase):
+  Phase 1: Ports (contracts)
+    + SplitBrainDetectorPort
+    + ConflictResolutionPort
+    + HealthStatePort
+    + SplitBrainDetectedError exception
+
+  Phase 2: Adapters (implementations)
+    + SplitBrainDetectorAdapter
+    + ConflictResolutionAdapter
+
+  Phase 3: Use Cases (orchestration)
+    + SplitBrainCoordinator
+
+  Phase 4: Integration (optional, tests)
+    + Docker-based integration tests
+
+
+================================================================================
+DEPENDENCY FLOW: CLEAN ARCHITECTURE RULE
+================================================================================
+
+                    ↓ imports only from
+                    
+    Domain Layer
+        ↓
+    Application Layer (SplitBrainCoordinator)
+        ↓
+    Adapters Layer
+        ├─ SplitBrainDetectorAdapter ──queries──→ RaftLeaderElectionPort
+        └─ ConflictResolutionAdapter ─accesses─→ LiteFS mount
+        ↓
+    Infrastructure (py-leader, LiteFS, Django)
+
+
+KEY INVARIANT: Inner layers NEVER import adapters or infrastructure.
+Only adapters import infrastructure. Dependencies point inward only.
+
+
+================================================================================
+SPLIT-BRAIN SCENARIO: BEFORE & AFTER
+================================================================================
+
+SCENARIO: Network partition, 5-node cluster splits into 2+3
+
+BEFORE (RISKY):
+──────────────
+Partition 1 (2 nodes):          Partition 2 (3 nodes, quorum):
+  Node A (stale leader)         Node C (new leader)
+    └─ is_primary() = True      Node D (follower)
+    └─ .primary file exists     Node E (follower)
+    └─ Can write! ⚠️            └─ All nodes can write ✓
+
+
+AFTER (WITH SPLIT-BRAIN HANDLING):
+──────────────────────────────────
+
+Partition 1 (2 nodes):          Partition 2 (3 nodes, quorum):
+  Node A:                       Node C:
+    ├─ is_leader_elected()      ├─ is_leader_elected() = True ✓
+    │  = True (stale)           ├─ is_quorum() = True ✓
+    ├─ is_quorum() = False       ├─ No split-brain detected
+    ├─ detect_stale_leadership  ├─ Continues as primary
+    │  = True ✓ DETECTED!       └─ Accepts writes ✓
+    ├─ fence_write_access()     
+    │  → moves .primary to      Node D: (same as C)
+    │    .primary.blocked       
+    ├─ demote_from_leader()     Node E: (same as C)
+    ├─ state = REPLICA
+    └─ Cannot write ✓ FENCED
+
+
+================================================================================
+CALL SEQUENCE: DETECTING & RESOLVING SPLIT-BRAIN
+================================================================================
+
+  1. HTTP Request
+       ↓
+  2. Django Middleware
+       └─ if should_check():
+            coordinator.check_and_resolve_split_brain()
+       ↓
+  3. SplitBrainCoordinator.check_and_resolve_split_brain()
+       ├─ detector.detect_stale_leadership()
+       │   ├─ raft_port.is_leader_elected() → True
+       │   ├─ raft_port.is_quorum_reached() → False
+       │   └─ return True (SPLIT-BRAIN DETECTED!)
+       │
+       ├─ resolver.fence_write_access()
+       │   └─ Move/delete .primary file
+       │
+       ├─ resolver.apply_resolution_strategy(FORCE_REPLICA)
+       │   └─ Mark node as non-leader
+       │
+       ├─ failover.leader_election.demote_from_leader()
+       │   └─ Raft consensus: step down
+       │
+       ├─ failover.coordinate_transition()
+       │   └─ Update internal state: PRIMARY → REPLICA
+       │
+       └─ return SplitBrainState.RESOLVED ✓
+       ↓
+  4. Application continues
+       └─ Next write attempt will fail safely
+            (LiteFS rejects writes without .primary)
+
+
+================================================================================
+NO BREAKING CHANGES
+================================================================================
+
+Existing Applications:
+  • FailoverCoordinator still works unchanged
+  • No mandatory dependency on SplitBrainCoordinator
+  • Opt-in via configuration (LITEFS["DETECT_SPLIT_BRAIN"] = True)
+
+Code Example (Django):
+  settings.py:
+    LITEFS = {
+        "DETECT_SPLIT_BRAIN": True,  # Enable new safety feature
+        ...
+    }
+
+  apps.py:
+    if settings.LITEFS.get("DETECT_SPLIT_BRAIN"):
+        # Inject SplitBrainCoordinator into middleware
+        install_split_brain_middleware()
+
+
+================================================================================
+KEY ARCHITECTURAL DECISIONS
+================================================================================
+
+1. PORTS vs CONCRETE CLASSES?
+   Decision: Ports (Protocol interfaces)
+   Why: Testable, allows multiple implementations, loose coupling
+
+2. SYNC vs ASYNC?
+   Decision: Synchronous
+   Why: Matches existing architecture, called from sync middleware
+
+3. WHERE TO CALL?
+   Decision: Health check (every request or periodic task)
+   Why: Not in hot path, defensive check layer
+
+4. WHERE TO FENCE?
+   Decision: LiteFS mount point (.primary file)
+   Why: Prevents LiteFS writes at file system level, not app level
+
+5. ERROR HANDLING?
+   Decision: Log and continue (defensive pattern)
+   Why: Fencing is best-effort; errors don't cascade
+
+6. SINGLE RESPONSIBILITY?
+   Decision: Separate detection from resolution
+   Why: SplitBrainDetectorPort knows WHAT, ConflictResolutionPort knows HOW
+
+================================================================================
