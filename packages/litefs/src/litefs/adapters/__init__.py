@@ -4,12 +4,18 @@ from litefs.adapters.ports import (
     NodeIDResolverPort,
     EnvironmentNodeIDResolver,
     PrimaryDetectorPort,
+    LeaderElectionPort,
+    RaftLeaderElectionPort,
 )
+from litefs.adapters.raft_leader_election_adapter import RaftLeaderElectionAdapter
 
 __all__ = [
     "PrimaryDetectorPort",
     "NodeIDResolverPort",
     "EnvironmentNodeIDResolver",
+    "LeaderElectionPort",
+    "RaftLeaderElectionPort",
+    "RaftLeaderElectionAdapter",
 ]
 
 
