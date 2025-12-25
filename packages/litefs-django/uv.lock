@@ -114,6 +114,7 @@ requires-dist = [{ name = "pyyaml", specifier = ">=6.0.3" }]
 [package.metadata.requires-dev]
 dev = [
     { name = "hypothesis", specifier = ">=6.0.0" },
+    { name = "mypy", specifier = ">=1.11.0" },
     { name = "pytest", specifier = ">=9.0.2" },
 ]
 

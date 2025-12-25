@@ -9,6 +9,8 @@ from django.conf import settings as django_settings
 from litefs_django.settings import get_litefs_settings
 from litefs.usecases.mount_validator import MountValidator
 from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningError
+from litefs.usecases.primary_initializer import PrimaryInitializer
+from litefs.adapters.ports import EnvironmentNodeIDResolver
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +54,42 @@ class LiteFSDjangoConfig(AppConfig):
                 return
 
             # Check if this node is primary (optional, for logging)
+            # Use different detection method based on leader_election mode
             try:
-                detector = PrimaryDetector(litefs_settings.mount_path)
-                is_primary = detector.is_primary()
-                logger.info(
-                    f"LiteFS initialized. Node is {'primary' if is_primary else 'replica'}."
-                )
+                if litefs_settings.leader_election == "static":
+                    # Static mode: use PrimaryInitializer with static config
+                    if litefs_settings.static_leader_config is None:
+                        logger.warning(
+                            "Static leader election configured but no static_leader_config found."
+                        )
+                        return
+
+                    try:
+                        # Resolve current node's ID
+                        resolver = EnvironmentNodeIDResolver()
+                        current_node_id = resolver.resolve_node_id()
+
+                        # Determine if this node is primary
+                        initializer = PrimaryInitializer(litefs_settings.static_leader_config)
+                        is_primary = initializer.is_primary(current_node_id)
+
+                        logger.info(
+                            f"LiteFS initialized (static mode). Node is "
+                            f"{'primary' if is_primary else 'replica'}."
+                        )
+                    except (KeyError, ValueError) as e:
+                        logger.warning(
+                            f"Failed to resolve node ID for static primary detection: {e}. "
+                            "LITEFS_NODE_ID environment variable may not be set or is invalid."
+                        )
+                else:
+                    # Raft mode: use PrimaryDetector for runtime detection
+                    detector = PrimaryDetector(litefs_settings.mount_path)
+                    is_primary = detector.is_primary()
+                    logger.info(
+                        f"LiteFS initialized (raft mode). Node is "
+                        f"{'primary' if is_primary else 'replica'}."
+                    )
             except LiteFSNotRunningError:
                 logger.warning("LiteFS is not running or mount path is invalid.")
 

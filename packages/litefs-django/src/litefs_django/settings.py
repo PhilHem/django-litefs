@@ -3,7 +3,7 @@
 from typing import Any
 
 from litefs.domain.exceptions import LiteFSConfigError
-from litefs.domain.settings import LiteFSSettings
+from litefs.domain.settings import LiteFSSettings, StaticLeaderConfig
 
 # Required fields that must be present in Django settings
 _REQUIRED_FIELDS = (
@@ -17,7 +17,7 @@ _REQUIRED_FIELDS = (
 )
 
 # Optional fields that default to None if not provided
-_OPTIONAL_FIELDS = ("RAFT_SELF_ADDR", "RAFT_PEERS")
+_OPTIONAL_FIELDS = ("RAFT_SELF_ADDR", "RAFT_PEERS", "PRIMARY_HOSTNAME")
 
 
 def get_litefs_settings(django_settings: dict[str, Any]) -> LiteFSSettings:
@@ -63,9 +63,22 @@ def get_litefs_settings(django_settings: dict[str, Any]) -> LiteFSSettings:
             # Optional fields default to None if not provided
             kwargs[domain_field] = None
 
+    # Parse static leader configuration if leader_election is "static"
+    leader_election = kwargs.get("leader_election")
+    if leader_election == "static":
+        # PRIMARY_HOSTNAME is required for static mode
+        if "PRIMARY_HOSTNAME" not in django_settings:
+            raise LiteFSConfigError(
+                "PRIMARY_HOSTNAME is required when LEADER_ELECTION is 'static'"
+            )
+        primary_hostname = django_settings["PRIMARY_HOSTNAME"]
+        # StaticLeaderConfig validates the hostname in __post_init__
+        kwargs["static_leader_config"] = StaticLeaderConfig(
+            primary_hostname=primary_hostname
+        )
+    else:
+        # static_leader_config is None for non-static modes
+        kwargs["static_leader_config"] = None
+
     # Create domain object (validation happens in __post_init__)
     return LiteFSSettings(**kwargs)
-
-
-
-

@@ -82,6 +82,78 @@ class TestLiteFSSettings:
                 retention="1h",
             )
 
+    def test_reject_empty_database_name(self):
+        """Test that empty database_name is rejected."""
+        with pytest.raises(LiteFSConfigError, match="database_name cannot be empty"):
+            LiteFSSettings(
+                mount_path="/litefs",
+                data_path="/var/lib/litefs",
+                database_name="",
+                leader_election="static",
+                proxy_addr=":8080",
+                enabled=True,
+                retention="1h",
+            )
+
+    def test_reject_whitespace_only_database_name(self):
+        """Test that whitespace-only database_name is rejected."""
+        with pytest.raises(LiteFSConfigError, match="database_name cannot be empty"):
+            LiteFSSettings(
+                mount_path="/litefs",
+                data_path="/var/lib/litefs",
+                database_name="   ",
+                leader_election="static",
+                proxy_addr=":8080",
+                enabled=True,
+                retention="1h",
+            )
+
+
+@pytest.mark.unit
+@pytest.mark.property
+class TestDatabaseNameValidationPBT:
+    """Property-based tests for database_name validation."""
+
+    @given(
+        database_name=st.text(
+            alphabet=st.characters(
+                min_codepoint=33,  # Start after space
+                max_codepoint=126,  # Printable ASCII
+                blacklist_characters=" \t\n\r",  # Exclude whitespace
+            ),
+            min_size=1,
+            max_size=100,
+        )
+    )
+    def test_non_whitespace_database_names_accepted(self, database_name):
+        """PBT: Valid non-whitespace database names should be accepted."""
+        settings = LiteFSSettings(
+            mount_path="/litefs",
+            data_path="/var/lib/litefs",
+            database_name=database_name,
+            leader_election="static",
+            proxy_addr=":8080",
+            enabled=True,
+            retention="1h",
+        )
+        assert settings.database_name == database_name
+
+    @given(
+        whitespace=st.sampled_from([" ", "  ", "   ", "\t", " \t ", "\t\t"])
+    )
+    def test_whitespace_only_database_names_rejected(self, whitespace):
+        """PBT: Whitespace-only database names should be rejected."""
+        with pytest.raises(LiteFSConfigError):
+            LiteFSSettings(
+                mount_path="/litefs",
+                data_path="/var/lib/litefs",
+                database_name=whitespace,
+                leader_election="static",
+                proxy_addr=":8080",
+                enabled=True,
+                retention="1h",
+            )
+
 
 @pytest.mark.unit
 @pytest.mark.property

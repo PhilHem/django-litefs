@@ -79,6 +79,71 @@ PyPI Packages:
 > See [.claude/docs/ARCHITECTURE.md] for full package structure and layer mapping.
 > See [.claude/docs/DEPLOYMENT.md] for deployment diagrams and networking.
 
+## Subagent Context
+
+> **For task workers and parallel agents.** Read this section before discovering project layout.
+
+### Package Commands
+
+| Package | Directory | Run Tests | Run Mypy |
+|---------|-----------|-----------|----------|
+| litefs-py | `packages/litefs/` | `cd packages/litefs && uv run pytest ../../tests/core/` | `cd packages/litefs && uv run mypy src/litefs/` |
+| litefs-django | `packages/litefs-django/` | `cd packages/litefs-django && uv run pytest ../../tests/django_adapter/` | `cd packages/litefs-django && uv run mypy src/litefs_django/` |
+
+### Test Locations
+
+| Package | Unit Tests | Integration Tests |
+|---------|------------|-------------------|
+| litefs-py | `tests/core/unit/` | `tests/core/integration/` |
+| litefs-django | `tests/django_adapter/unit/` | `tests/django_adapter/integration/` |
+
+### Test Patterns
+
+- **Decorator**: `@pytest.mark.unit`, `@pytest.mark.property`
+- **Use case tests**: See `tests/core/unit/usecases/test_primary_detector.py`
+- **Domain tests**: See `tests/core/unit/domain/test_static_leader_config.py`
+- **Port tests**: See `tests/core/unit/adapters/test_ports.py`
+- **Django adapter tests**: See `tests/django_adapter/unit/test_settings.py`
+- **Django AppConfig tests**: See `tests/django_adapter/unit/test_apps.py`
+
+#### Testing Django AppConfig
+
+When testing `AppConfig.ready()`, avoid direct instantiation (causes module loading issues):
+
+```python
+from unittest.mock import Mock
+from litefs_django.apps import LiteFSDjangoConfig
+
+def create_test_config():
+    config = Mock(spec=LiteFSDjangoConfig)
+    config.ready = LiteFSDjangoConfig.ready.__get__(config)
+    config.name = "litefs_django"
+    return config
+
+# Usage in tests
+config = create_test_config()
+config.ready()
+```
+
+#### Type Checking Note
+
+Mypy may not be installed in dev environment. Verify code compiles with:
+```bash
+python3 -m py_compile src/litefs_django/apps.py
+```
+
+### Key Interfaces (for dependency context)
+
+When tasks depend on completed work, reference these locations:
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `StaticLeaderConfig` | `packages/litefs/src/litefs/domain/settings.py` | Static leader election config value object |
+| `LiteFSSettings` | `packages/litefs/src/litefs/domain/settings.py` | Main settings domain entity |
+| `NodeIDResolverPort` | `packages/litefs/src/litefs/adapters/ports.py` | Port for resolving current node ID |
+| `PrimaryInitializer` | `packages/litefs/src/litefs/usecases/primary_initializer.py` | Use case for static primary detection |
+| `get_litefs_settings` | `packages/litefs-django/src/litefs_django/settings.py` | Django settings reader |
+
 ## Clean Architecture
 
 This project follows Clean Architecture principles. **Flag violations when spotted.**
@@ -138,10 +203,12 @@ uv lock                      # Update lock file
 > See [.claude/skills/litefs-testing/SKILL.md] for full testing strategy, fixtures, and patterns.
 
 ```bash
-pytest -m unit           # Fast, no LiteFS process
-pytest -m integration    # With Docker + FUSE
-pytest -m property       # Property-based tests
+uv run pytest -m unit           # Fast, no LiteFS process
+uv run pytest -m integration    # With Docker + FUSE
+uv run pytest -m property       # Property-based tests
 ```
+
+**IMPORTANT**: Always prefix commands with `uv run` to use the project's virtual environment.
 
 **Unit tests must NOT** spawn subprocesses, access filesystem beyond temp dirs, or require FUSE/Docker.
 

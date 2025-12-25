@@ -259,6 +259,9 @@ class TestConfigRoundTrip:
             return
         if not mount_path.startswith("/") or not data_path.startswith("/"):
             return
+        # Skip if database_name is empty or whitespace-only (rejected by domain)
+        if not database_name or not database_name.strip():
+            return
 
         settings = LiteFSSettings(
             mount_path=mount_path,
@@ -299,6 +302,10 @@ class TestYAMLGenerationPBT:
     )
     def test_generated_yaml_is_valid(self, database_name, proxy_addr):
         """PBT: Generated YAML is always valid and parseable."""
+        # Skip if database_name is whitespace-only (rejected by domain validation)
+        if not database_name.strip():
+            return
+
         settings = LiteFSSettings(
             mount_path="/litefs",
             data_path="/var/lib/litefs",
@@ -325,13 +332,17 @@ class TestYAMLGenerationPBT:
     @given(value=st.text(max_size=100))
     def test_yaml_special_chars_handled(self, value):
         """PBT: YAML special chars (@*&!|>) produce valid output."""
+        # Skip if value is empty or whitespace-only (rejected by domain validation)
+        if not value or not value.strip():
+            return
+
         # Use value in database_name and proxy_addr
         settings = LiteFSSettings(
             mount_path="/litefs",
             data_path="/var/lib/litefs",
-            database_name=value if value else "db.sqlite3",
+            database_name=value,
             leader_election="static",
-            proxy_addr=value if value else ":8080",
+            proxy_addr=value,
             enabled=True,
             retention="1h",
         )

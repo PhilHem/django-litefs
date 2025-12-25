@@ -1,8 +1,9 @@
 """Use cases: Application logic layer."""
 
 from litefs.usecases.mount_validator import MountValidator
+from litefs.usecases.primary_initializer import PrimaryInitializer
 from litefs.usecases.sql_detector import SQLDetector
 
-__all__ = ["MountValidator", "SQLDetector"]
+__all__ = ["MountValidator", "PrimaryInitializer", "SQLDetector"]
 
 
