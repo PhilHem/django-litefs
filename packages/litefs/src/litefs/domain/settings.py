@@ -8,6 +8,42 @@ from litefs.domain.exceptions import LiteFSConfigError
 
 
 @dataclass(frozen=True)
+class RaftConfig:
+    """Raft leader election configuration.
+
+    Value object specifying the configuration for Raft-based leader election.
+    In Raft mode, nodes coordinate automatically to elect a primary.
+
+    Attributes:
+        self_addr: Network address of this node (e.g., '127.0.0.1:20202').
+                  Must be non-empty and non-whitespace.
+        peers: List of peer node addresses for cluster communication.
+               Must be a non-empty list of non-empty strings.
+    """
+
+    self_addr: str
+    peers: list[str]
+
+    def __post_init__(self) -> None:
+        """Validate Raft configuration."""
+        self._validate_self_addr()
+        self._validate_peers()
+
+    def _validate_self_addr(self) -> None:
+        """Validate self_addr is non-empty and contains no whitespace-only values."""
+        if not self.self_addr:
+            raise LiteFSConfigError("self_addr cannot be empty")
+
+        if not self.self_addr.strip():
+            raise LiteFSConfigError("self_addr cannot be whitespace-only")
+
+    def _validate_peers(self) -> None:
+        """Validate peers list is non-empty."""
+        if not self.peers:
+            raise LiteFSConfigError("peers list cannot be empty")
+
+
+@dataclass(frozen=True)
 class StaticLeaderConfig:
     """Static leader election configuration.
 
@@ -68,6 +104,7 @@ class LiteFSSettings:
         self._validate_database_name()
         self._validate_paths()
         self._validate_leader_election()
+        self._validate_raft_config()
 
     def _validate_database_name(self) -> None:
         """Validate that database_name is not empty or whitespace-only."""
@@ -102,4 +139,37 @@ class LiteFSSettings:
         if self.leader_election not in ("static", "raft"):
             raise LiteFSConfigError(
                 f"leader_election must be 'static' or 'raft', got: {self.leader_election}"
+            )
+
+    def _validate_raft_config(self) -> None:
+        """Validate Raft configuration when leader_election is 'raft'.
+
+        When leader_election="raft", both raft_self_addr and raft_peers must be
+        present and non-empty. When leader_election="static", these fields are ignored.
+        """
+        if self.leader_election != "raft":
+            return
+
+        # Check raft_self_addr is present
+        if self.raft_self_addr is None:
+            raise LiteFSConfigError(
+                "raft_self_addr is required when leader_election='raft'"
+            )
+
+        # Check raft_self_addr is not empty or whitespace-only
+        if not self.raft_self_addr or not self.raft_self_addr.strip():
+            raise LiteFSConfigError(
+                "raft_self_addr cannot be empty or whitespace-only when leader_election='raft'"
+            )
+
+        # Check raft_peers is present
+        if self.raft_peers is None:
+            raise LiteFSConfigError(
+                "raft_peers is required when leader_election='raft'"
+            )
+
+        # Check raft_peers is not empty
+        if not self.raft_peers:
+            raise LiteFSConfigError(
+                "raft_peers cannot be empty when leader_election='raft'"
             )

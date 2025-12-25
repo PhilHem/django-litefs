@@ -20,5 +20,6 @@ __pycache__/
 *$py.class
 *.so
 
-packages/litefs/.hypothesis/*
-.hypothesis/*
+# Hypothesis test cache
+.hypothesis/
+**/.hypothesis/

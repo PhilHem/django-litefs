@@ -59,3 +59,15 @@ class TestSQLDetector:
         assert detector.is_write_operation("-- comment\nINSERT INTO test VALUES (1)") is True
         assert detector.is_write_operation("/* comment */ SELECT * FROM test") is False
 
+    def test_is_write_operation_cte_with_update_alias(self):
+        """Test CTE with UPDATE as alias name (false positive regression test)."""
+        detector = SQLDetector()
+        # CTE with UPDATE as alias should not be detected as write
+        assert detector.is_write_operation("WITH UPDATE AS (SELECT 1) SELECT * FROM UPDATE") is False
+        # CTE with INSERT as alias should not be detected as write
+        assert detector.is_write_operation("WITH INSERT AS (SELECT 1) SELECT * FROM INSERT") is False
+        # CTE with DELETE as alias should not be detected as write
+        assert detector.is_write_operation("WITH DELETE AS (SELECT 1) SELECT * FROM DELETE") is False
+        # But actual write operation in CTE should still be detected
+        assert detector.is_write_operation("WITH UPDATE AS (SELECT 1) UPDATE test SET x = 1") is True
+

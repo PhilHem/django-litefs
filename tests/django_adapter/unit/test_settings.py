@@ -147,6 +147,13 @@ class TestSettingsReader:
         if leader_election == "static" and primary_hostname is None:
             return
 
+        # For raft mode, raft_self_addr and raft_peers are required
+        if leader_election == "raft":
+            if raft_self_addr is None or not raft_self_addr.strip():
+                return
+            if raft_peers is None or len(raft_peers) == 0:
+                return
+
         django_settings = {
             "MOUNT_PATH": mount_path,
             "DATA_PATH": data_path,

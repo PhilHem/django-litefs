@@ -63,6 +63,119 @@ class NodeIDResolverPort(Protocol):
         ...
 
 
+@runtime_checkable
+class LeaderElectionPort(Protocol):
+    """Port interface for leader election coordination.
+
+    Implementations handle the consensus mechanism for electing a leader node.
+    Abstracts the underlying election algorithm (static, RAFT, etc.) from the
+    coordinator that needs to orchestrate state transitions.
+
+    Contract:
+        - is_leader_elected() returns True if this node is the elected leader
+        - elect_as_leader() performs leader election and updates state
+        - demote_from_leader() removes this node from leadership
+        - All methods are idempotent (multiple calls have same effect as one)
+    """
+
+    def is_leader_elected(self) -> bool:
+        """Check if this node is the elected leader.
+
+        Returns:
+            True if this node is the elected leader, False otherwise.
+        """
+        ...
+
+    def elect_as_leader(self) -> None:
+        """Elect this node as the leader.
+
+        Idempotent: calling multiple times has same effect as calling once.
+        """
+        ...
+
+    def demote_from_leader(self) -> None:
+        """Demote this node from leadership.
+
+        Idempotent: calling multiple times has same effect as calling once.
+        """
+        ...
+
+
+@runtime_checkable
+class RaftLeaderElectionPort(LeaderElectionPort, Protocol):
+    """Port interface for Raft-based leader election.
+
+    Extends LeaderElectionPort with Raft-specific cluster management and
+    consensus operations. Abstracts Raft consensus details for use by
+    coordinators and primary election logic.
+
+    Contract:
+        - get_cluster_members() returns list of node IDs in the cluster
+        - is_member_in_cluster(node_id) checks if node is in the cluster
+        - get_election_timeout() returns timeout in seconds (must be > 0)
+        - get_heartbeat_interval() returns interval in seconds (must be > 0)
+        - is_quorum_reached() returns True if quorum is established
+        - Heartbeat interval must always be less than election timeout
+        - All list returns must not be None
+    """
+
+    def get_cluster_members(self) -> list[str]:
+        """Get list of all node IDs in the Raft cluster.
+
+        Returns:
+            List of node IDs (strings) in the cluster. May be empty list
+            if cluster is not yet initialized.
+        """
+        ...
+
+    def is_member_in_cluster(self, node_id: str) -> bool:
+        """Check if a node ID is a member of the Raft cluster.
+
+        Args:
+            node_id: The node ID to check.
+
+        Returns:
+            True if node_id is in the cluster, False otherwise.
+        """
+        ...
+
+    def get_election_timeout(self) -> float:
+        """Get the election timeout in seconds.
+
+        The election timeout is the duration a follower waits before
+        considering itself eligible to become a candidate. Must be greater
+        than heartbeat_interval to avoid unnecessary elections.
+
+        Returns:
+            Timeout duration in seconds (must be > 0).
+        """
+        ...
+
+    def get_heartbeat_interval(self) -> float:
+        """Get the heartbeat interval in seconds.
+
+        The heartbeat interval is how often the leader sends heartbeat
+        messages to maintain leadership. Must be less than election_timeout
+        to ensure reliable consensus without spurious elections.
+
+        Returns:
+            Interval duration in seconds (must be > 0).
+        """
+        ...
+
+    def is_quorum_reached(self) -> bool:
+        """Check if quorum is established in the cluster.
+
+        Quorum is reached when > n/2 nodes are responding/available,
+        where n is the total cluster size. This is required for any
+        leader election or log replication.
+
+        Returns:
+            True if quorum is reached, False otherwise.
+        """
+        ...
+
+
 class EnvironmentNodeIDResolver:
     """Default implementation: resolve node ID from LITEFS_NODE_ID environment variable.
 
