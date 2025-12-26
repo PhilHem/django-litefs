@@ -64,6 +64,8 @@ def three_node_cluster_partition(
     fixture.cleanup()
 
 
+@pytest.mark.tier(3)
+@pytest.mark.tra("Adapter.Cluster.Quorum")
 class TestQuorumBasedLeaderElection:
     """Test quorum-aware leader election behavior."""
 
@@ -188,6 +190,8 @@ class TestQuorumBasedLeaderElection:
             pytest.skip("docker-compose CLI not available")
 
 
+@pytest.mark.tier(3)
+@pytest.mark.tra("Adapter.Cluster.PartitionHealing")
 class TestPartitionHealing:
     """Test cluster recovery when partitions heal."""
 
@@ -380,6 +384,8 @@ class TestPartitionHealing:
         )
 
 
+@pytest.mark.tier(3)
+@pytest.mark.tra("Adapter.Cluster.NetworkPartition")
 class TestNetworkPartitionScenarios:
     """Test various network partition scenarios."""
 
@@ -605,6 +611,8 @@ class TestNetworkPartitionScenarios:
             pytest.skip("docker-compose CLI not available")
 
 
+@pytest.mark.tier(3)
+@pytest.mark.tra("Adapter.Cluster.AdvancedPartition")
 class TestAdvancedPartitionScenarios:
     """Test advanced network partition and recovery scenarios."""
 

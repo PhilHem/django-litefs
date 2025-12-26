@@ -54,6 +54,8 @@ def three_node_cluster(tmp_path: Path) -> Generator:  # type: ignore[type-arg]
     fixture.cleanup()
 
 
+@pytest.mark.tier(3)
+@pytest.mark.tra("Adapter.Cluster.Setup")
 class TestMultiNodeClusterSetup:
     """Test multi-node cluster initialization and setup."""
 
@@ -141,6 +143,8 @@ class TestMultiNodeClusterSetup:
             assert "image:" in content.split(f"{node_name}:")[1].split("\n")[1]
 
 
+@pytest.mark.tier(3)
+@pytest.mark.tra("Adapter.Cluster.LeaderElection")
 class TestLeaderElectionBehavior:
     """Test leader election in multi-node clusters."""
 
@@ -193,6 +197,8 @@ class TestLeaderElectionBehavior:
         assert len(three_node_cluster.nodes) == 3
 
 
+@pytest.mark.tier(3)
+@pytest.mark.tra("Adapter.Cluster.Failover")
 class TestFailoverScenarios:
     """Test failover behavior when nodes fail."""
 
@@ -387,6 +393,8 @@ class TestFailoverScenarios:
             pytest.skip("docker-compose CLI not available")
 
 
+@pytest.mark.tier(3)
+@pytest.mark.tra("Adapter.Cluster.HealthMonitoring")
 class TestHealthMonitoring:
     """Test health status propagation in multi-node clusters."""
 
