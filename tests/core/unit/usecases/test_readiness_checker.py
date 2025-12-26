@@ -273,3 +273,50 @@ class TestReadinessChecker:
         assert result.is_ready is True
         assert result.split_brain_detected is False
         assert result.leader_node_ids == ("node-1",)
+
+    def test_degraded_primary_is_not_ready(self) -> None:
+        """Test degraded PRIMARY node is not ready (cannot accept writes)."""
+        health_checker = FakeHealthChecker(state="degraded")
+        failover_coordinator = FakeFailoverCoordinator(is_primary=True)
+
+        checker = ReadinessChecker(
+            health_checker=health_checker,
+            failover_coordinator=failover_coordinator,
+        )
+        result = checker.check_readiness()
+
+        assert result.is_ready is False
+        assert result.can_accept_writes is False
+        assert result.error is not None
+        assert "degraded" in result.error.lower()
+
+    def test_degraded_replica_is_ready(self) -> None:
+        """Test degraded REPLICA node is still ready (can serve reads)."""
+        health_checker = FakeHealthChecker(state="degraded")
+        failover_coordinator = FakeFailoverCoordinator(is_primary=False)
+
+        checker = ReadinessChecker(
+            health_checker=health_checker,
+            failover_coordinator=failover_coordinator,
+        )
+        result = checker.check_readiness()
+
+        assert result.is_ready is True
+        assert result.can_accept_writes is False
+        assert result.error is None
+
+    def test_unhealthy_replica_is_not_ready(self) -> None:
+        """Test unhealthy REPLICA node is not ready (cannot serve anything)."""
+        health_checker = FakeHealthChecker(state="unhealthy")
+        failover_coordinator = FakeFailoverCoordinator(is_primary=False)
+
+        checker = ReadinessChecker(
+            health_checker=health_checker,
+            failover_coordinator=failover_coordinator,
+        )
+        result = checker.check_readiness()
+
+        assert result.is_ready is False
+        assert result.can_accept_writes is False
+        assert result.error is not None
+        assert "unhealthy" in result.error.lower()

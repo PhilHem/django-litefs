@@ -80,14 +80,18 @@ class ReadinessChecker:
         """Check if this node is ready to accept traffic.
 
         Evaluates readiness based on:
-        1. Health status from HealthChecker (must be "healthy")
+        1. Health status from HealthChecker
         2. Split brain detection from SplitBrainDetector (must be false if provided)
-        3. Write capability from FailoverCoordinator (PRIMARY can write)
+        3. Write capability from FailoverCoordinator (PRIMARY can write only if healthy)
+
+        Role-aware degradation logic:
+        - PRIMARY nodes: Must be healthy to accept writes. Degraded = not ready.
+        - REPLICA nodes: Can tolerate degradation for reads. Unhealthy = not ready.
 
         Returns:
             ReadinessResult containing:
             - is_ready: True if node can accept traffic
-            - can_accept_writes: True if node is PRIMARY
+            - can_accept_writes: True if node is PRIMARY and healthy
             - health_status: Current health status
             - split_brain_detected: True if multiple leaders detected
             - leader_node_ids: IDs of nodes claiming leadership
@@ -96,8 +100,8 @@ class ReadinessChecker:
         # Get health status
         health_status = self._health_checker.check_health()
 
-        # Determine write capability
-        can_accept_writes = self._failover_coordinator.state == NodeState.PRIMARY
+        # Determine node role
+        is_primary = self._failover_coordinator.state == NodeState.PRIMARY
 
         # Check for split brain if detector is provided
         split_brain_detected = False
@@ -110,15 +114,29 @@ class ReadinessChecker:
                 node.node_id for node in split_brain_status.leader_nodes
             )
 
-        # Determine readiness and error message
+        # Role-aware readiness logic:
+        # - PRIMARY: must be healthy (degraded = not ready, cannot accept writes)
+        # - REPLICA: can tolerate degradation (only unhealthy = not ready)
         error: str | None = None
 
-        if health_status.state != "healthy":
-            error = f"Node is {health_status.state}"
-        elif split_brain_detected:
-            error = f"Split brain detected: multiple leaders {leader_node_ids}"
-
-        is_ready = health_status.state == "healthy" and not split_brain_detected
+        if is_primary:
+            # Primary nodes must be fully healthy
+            is_ready = health_status.state == "healthy" and not split_brain_detected
+            can_accept_writes = (
+                health_status.state == "healthy" and not split_brain_detected
+            )
+            if health_status.state != "healthy":
+                error = f"Node is {health_status.state}"
+            elif split_brain_detected:
+                error = f"Split brain detected: multiple leaders {leader_node_ids}"
+        else:
+            # Replica nodes can tolerate degradation for reads
+            is_ready = health_status.state != "unhealthy" and not split_brain_detected
+            can_accept_writes = False  # Replicas never accept writes
+            if health_status.state == "unhealthy":
+                error = f"Node is {health_status.state}"
+            elif split_brain_detected:
+                error = f"Split brain detected: multiple leaders {leader_node_ids}"
 
         return ReadinessResult(
             is_ready=is_ready,
