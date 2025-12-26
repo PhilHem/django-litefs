@@ -240,6 +240,33 @@ litefs-django follows Clean Architecture principles:
 
 The adapter delegates all business logic to the core library and focuses on Django integration.
 
+## Read-Your-Writes Consistency with Proxy (Quick Start)
+
+When deploying behind a load balancer without session stickiness, use the LiteFS proxy to ensure read-your-writes consistency:
+
+```python
+LITEFS = {
+    # ... standard LiteFS settings ...
+
+    # Enable proxy for automatic consistency
+    "PROXY": {
+        "ADDR": ":8080",              # Proxy listen port
+        "TARGET": "localhost:8000",   # Django app address
+        "DB": "db.sqlite3",           # Database to track TXIDs
+    }
+}
+```
+
+**How it works**: The proxy automatically embeds transaction IDs (TXIDs) in cookies. When a user writes data, the proxy captures the TXID. On subsequent reads, the proxy ensures replicas have caught up to that TXID before returning results. This guarantees users always see their own writes, even across multiple replica nodes.
+
+**Benefits**:
+- ✅ No session stickiness needed
+- ✅ Load balancer can route freely
+- ✅ Transparent to application code
+- ✅ Works automatically for all requests
+
+**For detailed explanation, deployment examples, and troubleshooting**: See [Consistency Documentation](../../../.claude/docs/CONSISTENCY.md).
+
 ## Deployment
 
 ### Docker Compose Example

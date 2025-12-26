@@ -30,6 +30,8 @@
 - Single primary holds write lease; replicas sync asynchronously
 - No Kubernetes required—works with Docker Compose, VMs, or bare metal
 
+**For read-your-writes consistency details, see [CONSISTENCY.md]** — explains how TXID cookies ensure users always see their own writes, even across replica nodes.
+
 ## Leader Election (V2: Embedded Raft)
 
 No external services required. Uses PySyncObj for Raft consensus:

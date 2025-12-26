@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 
 @pytest.mark.unit
+@pytest.mark.tier(1)
 @pytest.mark.tra("Adapter.StaticLeaderElection.is_leader_elected")
 class TestStaticLeaderElection:
     """Tests for StaticLeaderElection adapter."""
