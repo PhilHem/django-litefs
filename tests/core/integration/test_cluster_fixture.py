@@ -8,7 +8,7 @@ import pytest
 from .conftest import ClusterFixture
 
 
-@pytest.mark.tra("Integration")
+@pytest.mark.tra("Adapter.Integration.ClusterFixtureBasic")
 class TestClusterFixtureBasic:
     """Test ClusterFixture basic functionality (no Docker required)."""
 
@@ -107,7 +107,7 @@ def skip_if_no_docker(litefs_available: bool) -> None:
         pytest.skip("Docker infrastructure not available")
 
 
-@pytest.mark.tra("Integration")
+@pytest.mark.tra("Adapter.Integration.ClusterFixture")
 class TestClusterFixture:
     """Test ClusterFixture infrastructure for multi-node Docker Compose.
 

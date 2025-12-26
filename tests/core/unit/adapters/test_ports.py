@@ -15,7 +15,7 @@ from litefs.domain.split_brain import RaftClusterState, RaftNodeState
 
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Port")
+@pytest.mark.tra("Port.NodeIDResolverPort")
 class TestNodeIDResolverPort:
     """Test NodeIDResolverPort protocol interface."""
 
@@ -37,7 +37,7 @@ class TestNodeIDResolverPort:
 
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Port")
+@pytest.mark.tra("Adapter.EnvironmentNodeIDResolver")
 class TestEnvironmentNodeIDResolver:
     """Test EnvironmentNodeIDResolver implementation."""
 
@@ -126,7 +126,7 @@ class TestEnvironmentNodeIDResolver:
 
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Port")
+@pytest.mark.tra("Contract.NodeIDResolver")
 class TestProtocolImplementationContract:
     """Test contract between protocol and implementations."""
 
@@ -161,7 +161,7 @@ class TestProtocolImplementationContract:
 
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Port")
+@pytest.mark.tra("Port.LeaderElectionPort")
 class TestLeaderElectionPort:
     """Test LeaderElectionPort protocol interface."""
 
@@ -189,7 +189,7 @@ class TestLeaderElectionPort:
 
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Port")
+@pytest.mark.tra("Port.RaftLeaderElectionPort")
 class TestRaftLeaderElectionPort:
     """Test RaftLeaderElectionPort protocol interface."""
 
@@ -571,7 +571,7 @@ class TestRaftLeaderElectionPort:
 
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Port")
+@pytest.mark.tra("Port.SplitBrainDetectorPort")
 class TestSplitBrainDetectorPort:
     """Test SplitBrainDetectorPort protocol interface."""
 

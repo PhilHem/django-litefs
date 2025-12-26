@@ -10,9 +10,8 @@ from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningEr
 
 
 @pytest.mark.tier(3)
-@pytest.mark.tier(2)
 @pytest.mark.no_parallel
-@pytest.mark.tra("Integration")
+@pytest.mark.tra("UseCase.PrimaryDetector.Concurrency")
 class TestPrimaryDetectorConcurrency:
     """Test concurrency issues in PrimaryDetector.
 
