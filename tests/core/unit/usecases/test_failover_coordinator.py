@@ -8,6 +8,22 @@ from litefs.adapters.ports import LeaderElectionPort
 from litefs.domain.events import FailoverEvent, FailoverEventType
 
 
+class MockLoggingPort:
+    """Mock implementation of LoggingPort for testing."""
+
+    def __init__(self) -> None:
+        """Initialize with empty warnings list."""
+        self.warnings: list[str] = []
+
+    def warning(self, message: str) -> None:
+        """Record warning message."""
+        self.warnings.append(message)
+
+    def clear(self) -> None:
+        """Clear recorded warnings."""
+        self.warnings.clear()
+
+
 class MockLeaderElectionPort:
     """Mock implementation of LeaderElectionPort for testing."""
 
@@ -659,3 +675,105 @@ class TestFailoverCoordinatorEventEmission:
         # No events should be emitted
         assert len(emitter.events) == 0
         assert coordinator.state == NodeState.REPLICA
+
+
+@pytest.mark.tier(1)
+@pytest.mark.tra("UseCase.FailoverCoordinator")
+class TestFailoverCoordinatorLogging:
+    """Test FailoverCoordinator logging functionality."""
+
+    def test_logger_is_optional(self) -> None:
+        """Test that logger is optional (backward compatible)."""
+        port = MockLeaderElectionPort(is_elected=False)
+        # Should work without logger
+        coordinator = FailoverCoordinator(leader_election=port)
+        coordinator.mark_unhealthy()
+        coordinator.can_become_leader()
+        # No exception raised
+
+    def test_no_logging_when_logger_is_none(self) -> None:
+        """Test that no logging occurs when logger is None."""
+        port = MockRaftLeaderElectionPort(is_elected=False, quorum_reached=False)
+        coordinator = FailoverCoordinator(leader_election=port, logger=None)
+        coordinator.mark_unhealthy()
+
+        # Should not raise even though health and quorum would block
+        result = coordinator.can_become_leader()
+        assert result is False
+
+    def test_logger_warning_on_health_blocks_can_become_leader(self) -> None:
+        """Test that warning is logged when health blocks can_become_leader."""
+        port = MockRaftLeaderElectionPort(is_elected=False, quorum_reached=True)
+        logger = MockLoggingPort()
+        coordinator = FailoverCoordinator(leader_election=port, logger=logger)
+
+        # Mark unhealthy
+        coordinator.mark_unhealthy()
+        result = coordinator.can_become_leader()
+
+        assert result is False
+        assert len(logger.warnings) == 1
+        assert "unhealthy" in logger.warnings[0].lower()
+        assert "leader" in logger.warnings[0].lower()
+
+    def test_logger_warning_on_quorum_blocks_can_become_leader(self) -> None:
+        """Test that warning is logged when quorum blocks can_become_leader."""
+        port = MockRaftLeaderElectionPort(is_elected=False, quorum_reached=False)
+        logger = MockLoggingPort()
+        coordinator = FailoverCoordinator(leader_election=port, logger=logger)
+
+        # Node is healthy but quorum not reached
+        result = coordinator.can_become_leader()
+
+        assert result is False
+        assert len(logger.warnings) == 1
+        assert "quorum" in logger.warnings[0].lower()
+
+    def test_logger_warning_on_health_blocks_can_maintain_leadership(self) -> None:
+        """Test that warning is logged when health blocks can_maintain_leadership."""
+        port = MockRaftLeaderElectionPort(is_elected=True, quorum_reached=True)
+        logger = MockLoggingPort()
+        coordinator = FailoverCoordinator(leader_election=port, logger=logger)
+
+        # Mark unhealthy
+        coordinator.mark_unhealthy()
+        result = coordinator.can_maintain_leadership()
+
+        assert result is False
+        assert len(logger.warnings) == 1
+        assert "unhealthy" in logger.warnings[0].lower()
+        assert "maintain" in logger.warnings[0].lower() or "leader" in logger.warnings[0].lower()
+
+    def test_logger_warning_on_quorum_blocks_can_maintain_leadership(self) -> None:
+        """Test that warning is logged when quorum blocks can_maintain_leadership."""
+        port = MockRaftLeaderElectionPort(is_elected=True, quorum_reached=False)
+        logger = MockLoggingPort()
+        coordinator = FailoverCoordinator(leader_election=port, logger=logger)
+
+        result = coordinator.can_maintain_leadership()
+
+        assert result is False
+        assert len(logger.warnings) == 1
+        assert "quorum" in logger.warnings[0].lower()
+
+    def test_no_warning_when_can_become_leader_succeeds(self) -> None:
+        """Test that no warning is logged when can_become_leader succeeds."""
+        port = MockRaftLeaderElectionPort(is_elected=False, quorum_reached=True)
+        logger = MockLoggingPort()
+        coordinator = FailoverCoordinator(leader_election=port, logger=logger)
+
+        result = coordinator.can_become_leader()
+
+        assert result is True
+        assert len(logger.warnings) == 0
+
+    def test_no_warning_when_can_maintain_leadership_succeeds(self) -> None:
+        """Test that no warning is logged when can_maintain_leadership succeeds."""
+        port = MockRaftLeaderElectionPort(is_elected=True, quorum_reached=True)
+        logger = MockLoggingPort()
+        coordinator = FailoverCoordinator(leader_election=port, logger=logger)
+
+        result = coordinator.can_maintain_leadership()
+
+        assert result is True
+        assert len(logger.warnings) == 0

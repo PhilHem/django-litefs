@@ -9,7 +9,7 @@ from litefs.adapters.ports import LeaderElectionPort
 from litefs.domain.events import FailoverEvent, FailoverEventType
 
 if TYPE_CHECKING:
-    from litefs.adapters.ports import EventEmitterPort
+    from litefs.adapters.ports import EventEmitterPort, LoggingPort
 
 
 class NodeState(Enum):
@@ -56,6 +56,7 @@ class FailoverCoordinator:
         self,
         leader_election: LeaderElectionPort,
         event_emitter: EventEmitterPort | None = None,
+        logger: LoggingPort | None = None,
     ) -> None:
         """Initialize the failover coordinator.
 
@@ -65,9 +66,11 @@ class FailoverCoordinator:
         Args:
             leader_election: Port implementation for leader election consensus.
             event_emitter: Optional port for emitting state transition events.
+            logger: Optional port for logging warnings when promotion is blocked.
         """
         self.leader_election = leader_election
         self._event_emitter = event_emitter
+        self._logger = logger
         self._current_state = (
             NodeState.PRIMARY
             if leader_election.is_leader_elected()
@@ -134,10 +137,15 @@ class FailoverCoordinator:
 
         # Must be healthy
         if not self._healthy:
+            self._log_warning("Cannot maintain leadership: node is unhealthy")
             return False
 
         # Check quorum if available (Raft-based systems)
-        return self._check_quorum()
+        if not self._check_quorum():
+            self._log_warning("Cannot maintain leadership: quorum not reached")
+            return False
+
+        return True
 
     def can_become_leader(self) -> bool:
         """Check if this node can become the leader.
@@ -155,10 +163,15 @@ class FailoverCoordinator:
         """
         # Must be healthy
         if not self._healthy:
+            self._log_warning("Cannot become leader: node is unhealthy")
             return False
 
         # Check quorum if available (Raft-based systems)
-        return self._check_quorum()
+        if not self._check_quorum():
+            self._log_warning("Cannot become leader: quorum not reached")
+            return False
+
+        return True
 
     def _check_quorum(self) -> bool:
         """Check if quorum is reached (if available).
@@ -282,3 +295,12 @@ class FailoverCoordinator:
         if self._event_emitter is not None:
             event = FailoverEvent(event_type=event_type, reason=reason)
             self._event_emitter.emit(event)
+
+    def _log_warning(self, message: str) -> None:
+        """Log a warning message if a logger is configured.
+
+        Args:
+            message: The warning message to log.
+        """
+        if self._logger is not None:
+            self._logger.warning(message)
