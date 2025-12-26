@@ -6,6 +6,8 @@ These in-memory fakes replace real implementations that require I/O
 
 from __future__ import annotations
 
+from litefs.domain.split_brain import RaftClusterState, RaftNodeState
+
 
 class FakePrimaryDetector:
     """In-memory fake for PrimaryDetector - no filesystem access.
@@ -65,6 +67,83 @@ class FakePrimaryDetector:
 
     def set_error(self, error: Exception | None) -> None:
         """Set error to raise on next is_primary() call.
+
+        Args:
+            error: Exception to raise, or None to clear.
+        """
+        self._error = error
+
+
+class FakeSplitBrainDetector:
+    """In-memory fake for SplitBrainDetectorPort - no network access.
+
+    Use this instead of mocking SplitBrainDetectorPort in unit tests for:
+    - Faster test execution (no network I/O)
+    - Cleaner test code (no mock.patch boilerplate)
+    - Stateful testing (configure various cluster states during test)
+    - Split-brain scenario testing (multiple leaders, no leaders, etc.)
+
+    Implements SplitBrainDetectorPort protocol for type safety.
+
+    Example:
+        def test_split_brain_detection(fake_split_brain_detector):
+            # Configure split-brain state (two leaders)
+            fake_split_brain_detector.set_cluster_state(
+                RaftClusterState(nodes=[
+                    RaftNodeState(node_id="node1", is_leader=True),
+                    RaftNodeState(node_id="node2", is_leader=True),
+                ])
+            )
+            detector = SplitBrainDetector(port=fake_split_brain_detector)
+            result = detector.detect_split_brain()
+            assert result.is_split_brain is True
+    """
+
+    def __init__(
+        self,
+        cluster_state: RaftClusterState | None = None,
+    ) -> None:
+        """Initialize with desired cluster state.
+
+        Args:
+            cluster_state: Initial cluster state. If None, creates a default
+                healthy cluster with a single leader.
+        """
+        if cluster_state is None:
+            # Default: healthy cluster with single leader
+            cluster_state = RaftClusterState(
+                nodes=[
+                    RaftNodeState(node_id="node1", is_leader=True),
+                    RaftNodeState(node_id="node2", is_leader=False),
+                    RaftNodeState(node_id="node3", is_leader=False),
+                ]
+            )
+        self._cluster_state = cluster_state
+        self._error: Exception | None = None
+
+    def get_cluster_state(self) -> RaftClusterState:
+        """Return configured cluster state or raise configured error.
+
+        Returns:
+            The configured RaftClusterState.
+
+        Raises:
+            Exception: If error was set via set_error().
+        """
+        if self._error:
+            raise self._error
+        return self._cluster_state
+
+    def set_cluster_state(self, cluster_state: RaftClusterState) -> None:
+        """Set cluster state for testing.
+
+        Args:
+            cluster_state: New cluster state to return from get_cluster_state().
+        """
+        self._cluster_state = cluster_state
+
+    def set_error(self, error: Exception | None) -> None:
+        """Set error to raise on next get_cluster_state() call.
 
         Args:
             error: Exception to raise, or None to clear.
