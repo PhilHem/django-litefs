@@ -1,3 +1,4 @@
+# @bdd-decomposed: 2025-12-26 status=implemented
 Feature: Primary Node Detection
   As a LiteFS node
   I need to know if I am the primary node

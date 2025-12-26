@@ -82,6 +82,32 @@ class StaticLeaderConfig:
 
 
 @dataclass(frozen=True)
+class ForwardingSettings:
+    """Write forwarding configuration for replica nodes.
+
+    Value object for configuring how replica nodes forward write requests
+    to the primary node in a LiteFS cluster.
+
+    Attributes:
+        enabled: Whether write forwarding is enabled. Defaults to False.
+        primary_url: URL of the primary node for forwarding writes.
+                    Required when enabled=True. Defaults to None.
+        timeout_seconds: Timeout for forwarded requests in seconds.
+                        Defaults to 30.0.
+        retry_count: Number of retry attempts for failed forwards.
+                    Defaults to 1.
+        excluded_paths: URL paths to exclude from forwarding (e.g., health checks).
+                       Uses tuple for immutability. Defaults to empty tuple.
+    """
+
+    enabled: bool = False
+    primary_url: str | None = None
+    timeout_seconds: float = 30.0
+    retry_count: int = 1
+    excluded_paths: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class ProxySettings:
     """HTTP proxy configuration for handling read-your-writes consistency.
 

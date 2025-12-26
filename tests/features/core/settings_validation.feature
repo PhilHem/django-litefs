@@ -1,3 +1,4 @@
+# @bdd-decomposed: 2025-12-26 status=implemented
 Feature: Settings Domain Validation
   As a developer configuring LiteFS
   I need clear error messages when my configuration is invalid
