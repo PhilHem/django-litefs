@@ -1,6 +1,6 @@
 """LiteFS settings domain entity."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
@@ -81,6 +81,61 @@ class StaticLeaderConfig:
             )
 
 
+@dataclass(frozen=True)
+class ProxySettings:
+    """HTTP proxy configuration for handling read-your-writes consistency.
+
+    Value object for LiteFS proxy settings. The proxy sits between clients and
+    the application, tracking transaction IDs via cookies to ensure reads
+    always see writes that occurred on previous requests.
+
+    Attributes:
+        addr: Proxy listen address (e.g., ':8080'). Must be non-empty.
+        target: Application address (e.g., 'localhost:8081'). Must be non-empty.
+        db: Database name for TXID tracking (e.g., 'db.sqlite3'). Must be non-empty.
+        passthrough: List of URL patterns to bypass proxy (e.g., ['/static/*', '*.css']).
+                    Defaults to empty list.
+        primary_redirect_timeout: Duration to hold writes during failover (e.g., '5s', '10s').
+                                Defaults to '5s'.
+    """
+
+    addr: str
+    target: str
+    db: str
+    passthrough: list[str] = field(default_factory=list)
+    primary_redirect_timeout: str = "5s"
+
+    def __post_init__(self) -> None:
+        """Validate proxy settings."""
+        self._validate_addr()
+        self._validate_target()
+        self._validate_db()
+
+    def _validate_addr(self) -> None:
+        """Validate addr is non-empty and non-whitespace."""
+        if not self.addr:
+            raise LiteFSConfigError("addr cannot be empty")
+
+        if not self.addr.strip():
+            raise LiteFSConfigError("addr cannot be whitespace-only")
+
+    def _validate_target(self) -> None:
+        """Validate target is non-empty and non-whitespace."""
+        if not self.target:
+            raise LiteFSConfigError("target cannot be empty")
+
+        if not self.target.strip():
+            raise LiteFSConfigError("target cannot be whitespace-only")
+
+    def _validate_db(self) -> None:
+        """Validate db is non-empty and non-whitespace."""
+        if not self.db:
+            raise LiteFSConfigError("db cannot be empty")
+
+        if not self.db.strip():
+            raise LiteFSConfigError("db cannot be whitespace-only")
+
+
 @dataclass
 class LiteFSSettings:
     """LiteFS configuration settings.
@@ -98,6 +153,7 @@ class LiteFSSettings:
     raft_self_addr: str | None = None
     raft_peers: list[str] | None = None
     static_leader_config: StaticLeaderConfig | None = None
+    proxy: ProxySettings | None = None
 
     def __post_init__(self) -> None:
         """Validate settings after initialization."""

@@ -386,5 +386,125 @@ class TestConfigDeterminism:
         assert yaml1 == yaml2 == yaml3
 
 
+@pytest.mark.tier(1)
+@pytest.mark.tra("UseCase")
+class TestConfigGeneratorProxy:
+    """Test ConfigGenerator proxy section generation."""
+
+    def test_generate_proxy_with_all_fields(self) -> None:
+        """Test generating config with complete proxy configuration."""
+        from litefs.domain.settings import ProxySettings
+
+        proxy_settings = ProxySettings(
+            addr=":8080",
+            target="localhost:8081",
+            db="db.sqlite3",
+            passthrough=["/static/*", "*.css"],
+            primary_redirect_timeout="10s",
+        )
+
+        settings = LiteFSSettings(
+            mount_path="/litefs",
+            data_path="/var/lib/litefs",
+            database_name="db.sqlite3",
+            leader_election="static",
+            proxy_addr=":8080",
+            enabled=True,
+            retention="1h",
+            proxy=proxy_settings,
+        )
+
+        generator = ConfigGenerator()
+        config = generator.generate(settings)
+        parsed = yaml.safe_load(config)
+
+        # Verify proxy section exists
+        assert "proxy" in parsed
+        proxy = parsed["proxy"]
+
+        # Verify all proxy fields
+        assert proxy["addr"] == ":8080"
+        assert proxy["target"] == "localhost:8081"
+        assert proxy["db"] == "db.sqlite3"
+        assert proxy["passthrough"] == ["/static/*", "*.css"]
+        assert proxy["primary_redirect_timeout"] == "10s"
+
+    def test_generate_proxy_with_default_timeout(self) -> None:
+        """Test generating config with default primary_redirect_timeout."""
+        from litefs.domain.settings import ProxySettings
+
+        proxy_settings = ProxySettings(
+            addr=":8080",
+            target="localhost:8081",
+            db="db.sqlite3",
+        )
+
+        settings = LiteFSSettings(
+            mount_path="/litefs",
+            data_path="/var/lib/litefs",
+            database_name="db.sqlite3",
+            leader_election="static",
+            proxy_addr=":8080",
+            enabled=True,
+            retention="1h",
+            proxy=proxy_settings,
+        )
+
+        generator = ConfigGenerator()
+        config = generator.generate(settings)
+        parsed = yaml.safe_load(config)
+
+        proxy = parsed["proxy"]
+        assert proxy["primary_redirect_timeout"] == "5s"
+
+    def test_generate_proxy_with_empty_passthrough(self) -> None:
+        """Test generating config with empty passthrough list."""
+        from litefs.domain.settings import ProxySettings
+
+        proxy_settings = ProxySettings(
+            addr=":8080",
+            target="localhost:8081",
+            db="db.sqlite3",
+            passthrough=[],
+        )
+
+        settings = LiteFSSettings(
+            mount_path="/litefs",
+            data_path="/var/lib/litefs",
+            database_name="db.sqlite3",
+            leader_election="static",
+            proxy_addr=":8080",
+            enabled=True,
+            retention="1h",
+            proxy=proxy_settings,
+        )
+
+        generator = ConfigGenerator()
+        config = generator.generate(settings)
+        parsed = yaml.safe_load(config)
+
+        proxy = parsed["proxy"]
+        assert proxy["passthrough"] == []
+
+    def test_generate_without_proxy_settings(self) -> None:
+        """Test generating config with proxy=None (backward compat)."""
+        settings = LiteFSSettings(
+            mount_path="/litefs",
+            data_path="/var/lib/litefs",
+            database_name="db.sqlite3",
+            leader_election="static",
+            proxy_addr=":8080",
+            enabled=True,
+            retention="1h",
+            proxy=None,
+        )
+
+        generator = ConfigGenerator()
+        config = generator.generate(settings)
+        parsed = yaml.safe_load(config)
+
+        # Should have proxy section with just addr (backward compat)
+        assert "proxy" in parsed
+        assert parsed["proxy"]["addr"] == ":8080"
 
 

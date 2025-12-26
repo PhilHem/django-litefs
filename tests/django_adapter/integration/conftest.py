@@ -18,6 +18,18 @@ def pytest_configure(config: Any) -> None:
     config.addinivalue_line(
         "markers", "e2e: End-to-end tests with Docker Compose cluster"
     )
+    config.addinivalue_line(
+        "markers", "tier(level): Test tier (0=instant, 1=fast, 2=standard, 3=slow, 4=manual)"
+    )
+    config.addinivalue_line(
+        "markers", "tra(anchor): Test Responsibility Anchor"
+    )
+    config.addinivalue_line(
+        "markers", "legacy: Legacy tests without TRA marker (being migrated)"
+    )
+    config.addinivalue_line(
+        "markers", "no_parallel: Tests that cannot run in parallel (shared state/filesystem)"
+    )
 
 
 def _check_fuse_available() -> bool:

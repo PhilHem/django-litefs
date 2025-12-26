@@ -1,0 +1,26 @@
+repos:
+  # Ruff linting and formatting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  # Standard pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+
+  # Fast pytest hook for tier(0) and tier(1) tests
+  - repo: local
+    hooks:
+      - id: pytest-fast
+        name: pytest (tier 0-1 only)
+        entry: bash -c 'cd packages/litefs-django && uv run pytest ../../tests/django_adapter -m "tier(1)" --timeout=2 -x'
+        language: system
+        types: [python]
+        pass_filenames: false
+        stages: [commit]

@@ -3,7 +3,7 @@
 from typing import Any
 
 from litefs.domain.exceptions import LiteFSConfigError
-from litefs.domain.settings import LiteFSSettings, StaticLeaderConfig
+from litefs.domain.settings import LiteFSSettings, StaticLeaderConfig, ProxySettings
 
 # Required fields that must be present in Django settings
 _REQUIRED_FIELDS = (
@@ -79,6 +79,32 @@ def get_litefs_settings(django_settings: dict[str, Any]) -> LiteFSSettings:
     else:
         # static_leader_config is None for non-static modes
         kwargs["static_leader_config"] = None
+
+    # Parse proxy configuration if provided
+    if "PROXY" in django_settings:
+        proxy_dict = django_settings["PROXY"]
+
+        # Validate required proxy fields
+        required_proxy_fields = ("ADDR", "TARGET", "DB")
+        missing_proxy_fields = [
+            field for field in required_proxy_fields if field not in proxy_dict
+        ]
+        if missing_proxy_fields:
+            raise LiteFSConfigError(
+                f"Missing required PROXY settings: {', '.join(sorted(missing_proxy_fields))}"
+            )
+
+        # ProxySettings validates required fields in __post_init__
+        kwargs["proxy"] = ProxySettings(
+            addr=proxy_dict["ADDR"],
+            target=proxy_dict["TARGET"],
+            db=proxy_dict["DB"],
+            passthrough=proxy_dict.get("PASSTHROUGH", []),
+            primary_redirect_timeout=proxy_dict.get("PRIMARY_REDIRECT_TIMEOUT", "5s"),
+        )
+    else:
+        # proxy is None if not provided
+        kwargs["proxy"] = None
 
     # Create domain object (validation happens in __post_init__)
     return LiteFSSettings(**kwargs)

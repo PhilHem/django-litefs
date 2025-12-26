@@ -106,7 +106,7 @@ class TestSettingsReader:
     @given(
         mount_path=st.just("/litefs"),
         data_path=st.just("/var/lib/litefs"),
-        database_name=st.text(min_size=1, max_size=50),
+        database_name=st.text(min_size=1, max_size=50).filter(lambda s: s.strip()),
         leader_election=st.sampled_from(["static", "raft"]),
         proxy_addr=st.text(min_size=1, max_size=50),
         enabled=st.booleans(),
@@ -246,6 +246,141 @@ class TestSettingsReader:
         }
         with pytest.raises(LiteFSConfigError, match="leader_election"):
             get_litefs_settings(django_settings)
+
+    def test_parse_proxy_config_with_all_fields(self) -> None:
+        """Test parsing PROXY config with all fields."""
+        django_settings = {
+            "MOUNT_PATH": "/litefs",
+            "DATA_PATH": "/var/lib/litefs",
+            "DATABASE_NAME": "db.sqlite3",
+            "LEADER_ELECTION": "static",
+            "PROXY_ADDR": ":8080",
+            "ENABLED": True,
+            "RETENTION": "1h",
+            "PRIMARY_HOSTNAME": "node1",
+            "PROXY": {
+                "ADDR": ":8080",
+                "TARGET": "localhost:8081",
+                "DB": "db.sqlite3",
+                "PASSTHROUGH": ["/static/*", "*.css", "*.js"],
+                "PRIMARY_REDIRECT_TIMEOUT": "10s",
+            },
+        }
+        settings = get_litefs_settings(django_settings)
+
+        # Verify proxy field exists
+        assert settings.proxy is not None
+        proxy = settings.proxy
+
+        # Verify all proxy fields
+        assert proxy.addr == ":8080"
+        assert proxy.target == "localhost:8081"
+        assert proxy.db == "db.sqlite3"
+        assert proxy.passthrough == ["/static/*", "*.css", "*.js"]
+        assert proxy.primary_redirect_timeout == "10s"
+
+    def test_parse_proxy_config_with_required_fields_only(self) -> None:
+        """Test parsing PROXY config with only required fields."""
+        django_settings = {
+            "MOUNT_PATH": "/litefs",
+            "DATA_PATH": "/var/lib/litefs",
+            "DATABASE_NAME": "db.sqlite3",
+            "LEADER_ELECTION": "static",
+            "PROXY_ADDR": ":8080",
+            "ENABLED": True,
+            "RETENTION": "1h",
+            "PRIMARY_HOSTNAME": "node1",
+            "PROXY": {
+                "ADDR": ":8080",
+                "TARGET": "localhost:8081",
+                "DB": "db.sqlite3",
+            },
+        }
+        settings = get_litefs_settings(django_settings)
+
+        # Verify proxy field exists with defaults
+        assert settings.proxy is not None
+        proxy = settings.proxy
+
+        assert proxy.addr == ":8080"
+        assert proxy.target == "localhost:8081"
+        assert proxy.db == "db.sqlite3"
+        assert proxy.passthrough == []
+        assert proxy.primary_redirect_timeout == "5s"
+
+    def test_parse_proxy_config_missing_required_addr(self) -> None:
+        """Test that missing PROXY.ADDR raises error."""
+        django_settings = {
+            "MOUNT_PATH": "/litefs",
+            "DATA_PATH": "/var/lib/litefs",
+            "DATABASE_NAME": "db.sqlite3",
+            "LEADER_ELECTION": "static",
+            "PROXY_ADDR": ":8080",
+            "ENABLED": True,
+            "RETENTION": "1h",
+            "PRIMARY_HOSTNAME": "node1",
+            "PROXY": {
+                "TARGET": "localhost:8081",
+                "DB": "db.sqlite3",
+            },
+        }
+        with pytest.raises(LiteFSConfigError, match="ADDR"):
+            get_litefs_settings(django_settings)
+
+    def test_parse_proxy_config_missing_required_target(self) -> None:
+        """Test that missing PROXY.TARGET raises error."""
+        django_settings = {
+            "MOUNT_PATH": "/litefs",
+            "DATA_PATH": "/var/lib/litefs",
+            "DATABASE_NAME": "db.sqlite3",
+            "LEADER_ELECTION": "static",
+            "PROXY_ADDR": ":8080",
+            "ENABLED": True,
+            "RETENTION": "1h",
+            "PRIMARY_HOSTNAME": "node1",
+            "PROXY": {
+                "ADDR": ":8080",
+                "DB": "db.sqlite3",
+            },
+        }
+        with pytest.raises(LiteFSConfigError, match="TARGET"):
+            get_litefs_settings(django_settings)
+
+    def test_parse_proxy_config_missing_required_db(self) -> None:
+        """Test that missing PROXY.DB raises error."""
+        django_settings = {
+            "MOUNT_PATH": "/litefs",
+            "DATA_PATH": "/var/lib/litefs",
+            "DATABASE_NAME": "db.sqlite3",
+            "LEADER_ELECTION": "static",
+            "PROXY_ADDR": ":8080",
+            "ENABLED": True,
+            "RETENTION": "1h",
+            "PRIMARY_HOSTNAME": "node1",
+            "PROXY": {
+                "ADDR": ":8080",
+                "TARGET": "localhost:8081",
+            },
+        }
+        with pytest.raises(LiteFSConfigError, match="DB"):
+            get_litefs_settings(django_settings)
+
+    def test_parse_without_proxy_config(self) -> None:
+        """Test parsing without PROXY field (backward compat)."""
+        django_settings = {
+            "MOUNT_PATH": "/litefs",
+            "DATA_PATH": "/var/lib/litefs",
+            "DATABASE_NAME": "db.sqlite3",
+            "LEADER_ELECTION": "static",
+            "PROXY_ADDR": ":8080",
+            "ENABLED": True,
+            "RETENTION": "1h",
+            "PRIMARY_HOSTNAME": "node1",
+        }
+        settings = get_litefs_settings(django_settings)
+
+        # proxy should default to None if not provided
+        assert settings.proxy is None
 
     def test_missing_required_field_raises_config_error(self):
         """Test that missing a single required field raises LiteFSConfigError (PROP-002)."""

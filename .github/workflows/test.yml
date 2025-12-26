@@ -1,0 +1,181 @@
+name: Tests
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['main']
+
+# Cancel in-progress runs when new push occurs
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Fast tests: tier(0,1,2) on every push
+  test-fast:
+    name: Test (fast) - Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        run: pip install uv
+
+      # Linting with ruff (single matrix job, not per-version)
+      - name: Lint with ruff (Python 3.12 only)
+        if: matrix.python-version == '3.12'
+        run: |
+          cd packages/litefs && uv sync --no-dev && uv run ruff check src/
+          cd ../litefs-django && uv sync --no-dev && uv run ruff check src/
+          cd ../litefs-fastapi && uv sync --no-dev && uv run ruff check src/
+          cd ../py-leader && uv sync --no-dev && uv run ruff check src/
+
+      # Type checking (Python 3.12 only for speed)
+      - name: Type check with mypy (Python 3.12 only)
+        if: matrix.python-version == '3.12'
+        run: |
+          cd packages/litefs && uv sync && uv run mypy src/litefs/ --strict
+          cd ../litefs-django && uv sync && uv run mypy src/litefs_django/ --strict
+          cd ../litefs-fastapi && uv sync && uv run mypy src/litefs_fastapi/ --strict
+          cd ../py-leader && uv sync && uv run mypy src/py_leader/ --strict
+
+      # Test litefs-py (core)
+      - name: Test litefs-py (core)
+        working-directory: packages/litefs
+        run: |
+          uv sync
+          uv run pytest ../../tests/core/ -m "tier(1) or tier(2)" -v --tb=short
+
+      # Test litefs-django
+      - name: Test litefs-django
+        working-directory: packages/litefs-django
+        run: |
+          uv sync
+          uv run pytest ../../tests/django_adapter/ -m "tier(1) or tier(2)" -v --tb=short
+
+      # Test litefs-fastapi
+      - name: Test litefs-fastapi
+        working-directory: packages/litefs-fastapi
+        run: |
+          uv sync
+          uv run pytest ../../tests/fastapi_adapter/ -m "tier(1) or tier(2)" -v --tb=short
+
+      # Test py-leader
+      - name: Test py-leader
+        working-directory: packages/py-leader
+        run: |
+          uv sync
+          uv run pytest ../../tests/py_leader/ -m "tier(1) or tier(2)" -v --tb=short
+
+  # Slow tests: tier(3) only on merge to main
+  test-slow:
+    name: Test (slow/integration)
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: pip install uv
+
+      # Test litefs-py integration
+      - name: Test litefs-py (integration)
+        working-directory: packages/litefs
+        run: |
+          uv sync
+          uv run pytest ../../tests/core/ -m "tier(3)" -v --tb=short
+
+      # Test litefs-django integration
+      - name: Test litefs-django (integration)
+        working-directory: packages/litefs-django
+        run: |
+          uv sync
+          uv run pytest ../../tests/django_adapter/ -m "tier(3)" -v --tb=short
+
+      # Test litefs-fastapi integration
+      - name: Test litefs-fastapi (integration)
+        working-directory: packages/litefs-fastapi
+        run: |
+          uv sync
+          uv run pytest ../../tests/fastapi_adapter/ -m "tier(3)" -v --tb=short
+
+      # Test py-leader integration
+      - name: Test py-leader (integration)
+        working-directory: packages/py-leader
+        run: |
+          uv sync
+          uv run pytest ../../tests/py_leader/ -m "tier(3)" -v --tb=short
+
+  # Manual tests: tier(4) on-demand
+  test-manual:
+    name: Test (manual/stress)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: pip install uv
+
+      # Test litefs-py manual
+      - name: Test litefs-py (manual/stress)
+        working-directory: packages/litefs
+        run: |
+          uv sync
+          uv run pytest ../../tests/core/ -m "tier(4)" -v --tb=short
+
+      # Test litefs-django manual
+      - name: Test litefs-django (manual/stress)
+        working-directory: packages/litefs-django
+        run: |
+          uv sync
+          uv run pytest ../../tests/django_adapter/ -m "tier(4)" -v --tb=short
+
+      # Test litefs-fastapi manual
+      - name: Test litefs-fastapi (manual/stress)
+        working-directory: packages/litefs-fastapi
+        run: |
+          uv sync
+          uv run pytest ../../tests/fastapi_adapter/ -m "tier(4)" -v --tb=short
+
+      # Test py-leader manual
+      - name: Test py-leader (manual/stress)
+        working-directory: packages/py-leader
+        run: |
+          uv sync
+          uv run pytest ../../tests/py_leader/ -m "tier(4)" -v --tb=short

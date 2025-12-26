@@ -19,6 +19,20 @@ class ConfigGenerator:
         Returns:
             YAML string representing LiteFS configuration
         """
+        # Build proxy config
+        proxy_config: dict[str, object] = {
+            "addr": settings.proxy_addr,
+        }
+
+        # Add detailed proxy settings if provided
+        if settings.proxy is not None:
+            proxy_config["target"] = settings.proxy.target
+            proxy_config["db"] = settings.proxy.db
+            proxy_config["passthrough"] = settings.proxy.passthrough
+            proxy_config["primary_redirect_timeout"] = (
+                settings.proxy.primary_redirect_timeout
+            )
+
         config = {
             "fuse": {
                 "dir": settings.mount_path,
@@ -34,13 +48,7 @@ class ConfigGenerator:
             "lease": {
                 "type": settings.leader_election,
             },
-            "proxy": {
-                "addr": settings.proxy_addr,
-            },
+            "proxy": proxy_config,
         }
 
         return yaml.dump(config, default_flow_style=False)
-
-
-
-
