@@ -329,10 +329,10 @@ def pytest_terminal_summary(terminalreporter: object, exitstatus: int, config: C
     if hasattr(terminalreporter, "stats") and hasattr(terminalreporter, "write_line"):
         stats_dict = getattr(terminalreporter, "stats", {})
         for item in stats_dict.get("passed", []):
-            if hasattr(item, "item"):
+            if hasattr(item, "item") and hasattr(item.item, "iter_markers"):
                 stats.record(item.item)
         for item in stats_dict.get("failed", []):
-            if hasattr(item, "item"):
+            if hasattr(item, "item") and hasattr(item.item, "iter_markers"):
                 stats.record(item.item)
 
         if stats.total > 0:
