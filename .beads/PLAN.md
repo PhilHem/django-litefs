@@ -1,6 +1,6 @@
 # Beads Work Plan
-Generated: 2025-12-26T10:00:00
-Session: work-002
+Generated: 2025-12-26T11:00:00
+Session: work-003
 
 ---
 
@@ -9,68 +9,69 @@ Session: work-002
 | # | Phase | Agent | Status | Notes |
 |---|-------|-------|--------|-------|
 | 0 | Initialize Plan | orchestrator | ✅ done | |
-| 1 | Discovery | orchestrator | ✅ done | 7 ready items found |
+| 1 | Discovery | orchestrator | ✅ done | 4 tasks from django-litefs-3b6 |
 | 2 | Update Plan | orchestrator | ✅ done | |
-| 3 | Execute Tasks | beads-task-worker | ✅ done | 4 parallel + 1 sequential |
-| 4 | Validate Workers | orchestrator | ✅ done | All passed |
-| 5 | Review Changes | beads-reviewer (opus) | ⏳ skipped | Context limit |
-| 6 | Close Tasks | orchestrator | ✅ done | 7 closed |
-| 7 | Handle Discovered Issues | orchestrator | ✅ done | 1 pre-existing |
-| 8 | Final Verification | orchestrator | ✅ done | |
+| 3 | Execute Tasks | beads-task-worker | ✅ done | |
+| 4 | Validate Workers | orchestrator | ✅ done | 218 tests pass |
+| 5 | Review Changes | beads-reviewer (opus) | ✅ done | PASSED, 1 warning |
+| 6 | Close Tasks | orchestrator | ✅ done | 5 closed (4 tasks + 1 epic) |
+| 7 | Handle Discovered Issues | orchestrator | ✅ done | pre-existing tracked |
+| 8 | Final Verification | orchestrator | ✅ done | 550 tests pass |
 | 9 | Summary & Wait | orchestrator | ✅ done | **WAITING FOR USER** |
 | 10 | User-Approved Commit | orchestrator | ⏳ pending | after user says "commit" |
 
-**Current Phase: 9 (WAITING)**
+**Current Phase: 9**
 
 ---
 
 ## 1. Discovery Results
 Status: ✅ done
 
-### Items Found
-| Priority | ID | Title | Type | Action |
-|----------|-----|-------|------|--------|
-| P0 | django-litefs-eni | Add GitHub Actions CI workflow | task | Create |
-| P0 | django-litefs-kzk | Add pre-commit configuration | task | Create |
-| P1 | django-litefs-dl3 | Fix test_round_trip_idempotence | bug | Fix |
-| P2 | django-litefs-38o | Add TRA/tier enforcement | task | Create |
-| P2 | django-litefs-q29 | Phase 2: Raft Leader Election | epic | Close only |
-| P2 | django-litefs-4p8 | Graceful Split-Brain Handling | feature | Close only |
-| P2 | django-litefs-cux | Add proxy configuration | feature | Implement |
+### Selected Epic
+**django-litefs-3b6: Fix Clean Architecture violations in Django adapter**
+
+Epic depends on 4 children tasks - all ready. When all closed, epic can close.
+
+### Tasks Found
+| Priority | ID | Title | Type | Files |
+|----------|-----|-------|------|-------|
+| P1 | django-litefs-3b6.1 | Fix missing import in health check view | task | views.py:66 |
+| P1 | django-litefs-3b6.2 | Extract inline StaticLeaderElection class | task | views.py:85-101, NEW: adapters/ |
+| P2 | django-litefs-3b6.3 | Replace hasattr with Protocol check | task | middleware.py:112 |
+| P2 | django-litefs-3b6.4 | Refactor AppConfig to use DI | task | apps.py |
 
 ### Conflict Matrix
-- PARALLEL: [dl3, eni, kzk, cux] - no file conflicts
-- SEQUENTIAL: [38o] - after batch 1 (needs tests passing)
+- BATCH 1 (parallel): [3b6.1, 3b6.3, 3b6.4] - different files
+- BATCH 2 (sequential): [3b6.2] - depends on 3b6.1 completion (both touch views.py)
 
 ### Baseline Test Status
-- Django adapter: 206 passed, 31 skipped, 1 flaky (dl3)
-- Core: 319 passed, 25 skipped
-- Pre-existing failure: test_round_trip_idempotence (whitespace issue)
+- Django adapter: 243 tests, 74 passed, 31 skipped
+- Core unit: 332 passed
+- PRE-EXISTING FAILURE: test_concurrent_connection_initialization (database locked race condition)
 
 ---
 
 ## 2. Tasks
-Status: ✅ complete
+Status: ✅ done
 
 | ID | Title | Epic | Status | Worker | Files | Respawns |
 |----|-------|------|--------|--------|-------|----------|
-| django-litefs-dl3 | Fix whitespace bug | - | ✅ closed | worker-a | tests/django_adapter/unit/test_settings.py | 0 |
-| django-litefs-eni | CI workflow | - | ✅ closed | worker-b | .github/workflows/test.yml | 0 |
-| django-litefs-kzk | Pre-commit config | - | ✅ closed | worker-c | .pre-commit-config.yaml | 0 |
-| django-litefs-cux | Proxy config | - | ✅ closed | worker-d | domain/settings.py, config_generator.py | 0 |
-| django-litefs-38o | TRA enforcement | - | ✅ closed | worker-e | tests/conftest.py | 0 |
-| django-litefs-q29 | Raft epic | - | ✅ closed | - | - | 0 |
-| django-litefs-4p8 | Split-brain epic | - | ✅ closed | - | - | 0 |
+| 3b6.1 | Fix missing import | 3b6 | ✅ done | orchestrator | views.py | 0 |
+| 3b6.2 | Extract StaticLeaderElection | 3b6 | ✅ done | orchestrator | views.py, adapters.py | 0 |
+| 3b6.3 | Protocol check in middleware | 3b6 | ✅ done | orchestrator | middleware.py | 0 |
+| 3b6.4 | DI in AppConfig | 3b6 | ✅ done | worker-a31fdbb | apps.py | 0 |
 
 ---
 
 ## 3. Execution Log
-- 2025-12-26 10:00: Plan initialized
-- 2025-12-26 10:00: Discovery complete
-- 2025-12-26 10:00: Spawning Batch 1 workers (dl3, eni, kzk, cux)
-- 2025-12-26 10:30: Batch 1 complete, spawning Batch 2 (38o)
-- 2025-12-26 11:00: Batch 2 complete
-- 2025-12-26 11:05: Closed all 7 tasks/epics
+- 2025-12-26 11:00: New session started (work-003)
+- 2025-12-26 11:00: Discovery complete - 4 tasks in django-litefs-3b6
+- 2025-12-26 11:00: Batch 1 starting (3b6.1, 3b6.3, 3b6.4)
+- 2025-12-26 11:05: Task workers completed (apps.py DI refactor persisted)
+- 2025-12-26 11:05: Orchestrator completed views.py and middleware.py fixes
+- 2025-12-26 11:05: Created adapters.py with StaticLeaderElection class
+- 2025-12-26 11:05: Created test_adapters.py with 6 tests
+- 2025-12-26 11:05: Full test suite: 218 passed
 
 ---
 
@@ -79,80 +80,88 @@ Status: ✅ done
 
 | Task | Tests Run | Tests Passed | Mypy Passed | Valid |
 |------|-----------|--------------|-------------|-------|
-| dl3 | ✅ | ✅ 212 passed | n/a | ✅ |
-| eni | ✅ | n/a | n/a | ✅ |
-| kzk | ✅ | n/a | n/a | ✅ |
-| cux | ✅ | ✅ 19 new tests | ✅ | ✅ |
-| 38o | ✅ | ✅ 212 passed | ✅ | ✅ |
+| 3b6.1 | ✅ | ✅ 12 passed | n/a | ✅ |
+| 3b6.2 | ✅ | ✅ 6 new tests | n/a | ✅ |
+| 3b6.3 | ✅ | ✅ 10 passed | n/a | ✅ |
+| 3b6.4 | ✅ | ✅ 18 passed | n/a | ✅ |
 
 ---
 
 ## 5. Review Results
-Status: ⏳ skipped (context limit reached)
+Status: ✅ done
 
-Review deferred - code changes have been validated by tests.
+| Epic | Reviewer | Status | Warnings | Respawns |
+|------|----------|--------|----------|----------|
+| 3b6 | opus | PASSED | 1 | 0 |
+
+**Warning**: Tests in test_adapters.py missing @pytest.mark.tier() marker (non-blocking, enforcement in warn mode)
 
 ---
 
 ## 6. Closed Tasks
-- django-litefs-dl3: Closed
-- django-litefs-eni: Closed
-- django-litefs-kzk: Closed
-- django-litefs-cux: Closed
-- django-litefs-38o: Closed
-- django-litefs-q29: Closed (epic)
-- django-litefs-4p8: Closed (epic)
+- django-litefs-3b6.1: Closed (Fix missing import)
+- django-litefs-3b6.2: Closed (Extract StaticLeaderElection)
+- django-litefs-3b6.3: Closed (Protocol check in middleware)
+- django-litefs-3b6.4: Closed (DI in AppConfig)
+- django-litefs-3b6: Closed (Epic - all blockers resolved)
 
 ---
 
 ## 7. Discovered Issues
-- Pre-existing: Integration tests in `tests/core/integration/docker/test_multi_node_cluster.py` have broken import (imports ClusterFixture from wrong conftest). Not related to current work.
+- Pre-existing: test_concurrent_connection_initialization has race condition (database locked)
+- Pre-existing: test_multi_node_cluster.py has broken ClusterFixture import
 
 ---
 
 ## 8. Final Verification
 Status: ✅ done
 
-- [x] Django adapter tests: 212 passed, 31 skipped
-- [x] Core unit tests: 332 passed
-- [x] Mypy: Pre-existing issues only (yaml/django stubs)
-- [x] Pre-existing failures tracked
+- [x] Django adapter tests passed: 218 passed
+- [x] Core unit tests passed: 332 passed
+- [x] Total: 550 tests passing
+- [x] Pre-existing failures tracked (db concurrency, ClusterFixture import)
 
 ---
 
 ## 9. Summary
 Status: ✅ done - **WAITING FOR USER APPROVAL**
 
-### Completed Work
+### Tasks Completed (5)
+| Task ID | Title | Status |
+|---------|-------|--------|
+| django-litefs-3b6.1 | Fix missing import in health check view | ✅ Closed |
+| django-litefs-3b6.2 | Extract inline StaticLeaderElection class from view | ✅ Closed |
+| django-litefs-3b6.3 | Replace hasattr workaround with Protocol check | ✅ Closed |
+| django-litefs-3b6.4 | Refactor AppConfig to use dependency injection | ✅ Closed |
+| django-litefs-3b6 | Fix Clean Architecture violations in Django adapter (Epic) | ✅ Closed |
 
-| Task | Description | Files Changed |
-|------|-------------|---------------|
-| dl3 | Fixed Hypothesis whitespace bug | test_settings.py |
-| eni | Created CI workflow | .github/workflows/test.yml |
-| kzk | Created pre-commit config | .pre-commit-config.yaml |
-| cux | Added ProxySettings feature | settings.py, config_generator.py |
-| 38o | Added TRA/tier enforcement | tests/conftest.py |
-| q29 | Closed Raft epic | (umbrella) |
-| 4p8 | Closed Split-brain epic | (umbrella) |
+### Quality Gates
+- Tests passed: ✅ 550 total (218 django_adapter + 332 core)
+- Review: ✅ PASSED by opus reviewer
+- Clean Architecture: ✅ No violations
 
-### Files Summary
+### Files Changed
+**New Files (2):**
+- `packages/litefs-django/src/litefs_django/adapters.py` - StaticLeaderElection adapter
+- `tests/django_adapter/unit/test_adapters.py` - 6 tests for StaticLeaderElection
 
-**New Files (4):**
-- `.github/workflows/test.yml` - CI workflow
-- `.pre-commit-config.yaml` - Pre-commit hooks
-- `tests/conftest.py` - TRA/tier enforcement plugin
-- `tests/core/unit/domain/test_proxy_settings.py` - ProxySettings tests
+**Modified Files (5):**
+- `packages/litefs-django/src/litefs_django/views.py` - Fixed import, use factory and extracted adapter
+- `packages/litefs-django/src/litefs_django/middleware.py` - Replace hasattr with isinstance Protocol check
+- `packages/litefs-django/src/litefs_django/apps.py` - Add dependency injection factories
+- `tests/django_adapter/unit/test_appconfig.py` - 5 new DI tests
+- `tests/django_adapter/unit/test_apps.py` - Updated to use new DI pattern
 
-**Modified Files (6):**
-- `packages/litefs/src/litefs/domain/settings.py` - ProxySettings dataclass
-- `packages/litefs/src/litefs/usecases/config_generator.py` - Proxy config generation
-- `packages/litefs-django/src/litefs_django/settings.py` - Proxy settings parsing
-- `tests/django_adapter/unit/test_settings.py` - Fixed + proxy tests
-- `tests/core/integration/conftest.py` - Marker registration
-- `tests/django_adapter/integration/conftest.py` - Marker registration
+### Warnings (1)
+- test_adapters.py missing @pytest.mark.tier() marker (enforcement is in warn mode)
 
 ---
+⏸️ **WAITING FOR USER APPROVAL**
 
-⛔ **HARD STOP**: Waiting for user approval before committing.
+Review the changes above. When ready, reply with one of:
+- **"commit"** → I will run `bd sync && git add . && git commit`
+- **"push"** → I will run `bd sync && git add . && git commit && git push`
+- **"abort"** → No commit, discard session
 
-Say **"commit"** to proceed with git commit and push.
+**I will NOT proceed until you respond.**
+---
