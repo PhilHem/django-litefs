@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from litefs.adapters.ports import LeaderElectionPort
+from litefs.domain.events import FailoverEvent, FailoverEventType
+
+if TYPE_CHECKING:
+    from litefs.adapters.ports import EventEmitterPort
 
 
 class NodeState(Enum):
@@ -39,6 +44,7 @@ class FailoverCoordinator:
     Dependencies:
         - LeaderElectionPort: Abstraction for leader election mechanism (static, RAFT, etc.)
         - RaftLeaderElectionPort (optional): For quorum-aware operations
+        - EventEmitterPort (optional): For emitting state transition events
 
     Thread safety:
         Reads from LeaderElectionPort which is responsible for synchronization.
@@ -46,7 +52,11 @@ class FailoverCoordinator:
         externally if accessed from multiple threads).
     """
 
-    def __init__(self, leader_election: LeaderElectionPort) -> None:
+    def __init__(
+        self,
+        leader_election: LeaderElectionPort,
+        event_emitter: EventEmitterPort | None = None,
+    ) -> None:
         """Initialize the failover coordinator.
 
         Determines initial state based on current election status from the
@@ -54,8 +64,10 @@ class FailoverCoordinator:
 
         Args:
             leader_election: Port implementation for leader election consensus.
+            event_emitter: Optional port for emitting state transition events.
         """
         self.leader_election = leader_election
+        self._event_emitter = event_emitter
         self._current_state = (
             NodeState.PRIMARY
             if leader_election.is_leader_elected()
@@ -95,10 +107,12 @@ class FailoverCoordinator:
         # Transition from REPLICA to PRIMARY
         if is_elected and not current_is_primary:
             self._current_state = NodeState.PRIMARY
+            self._emit_event(FailoverEventType.PROMOTED_TO_PRIMARY)
 
         # Transition from PRIMARY to REPLICA
         elif not is_elected and current_is_primary:
             self._current_state = NodeState.REPLICA
+            self._emit_event(FailoverEventType.DEMOTED_TO_REPLICA)
 
     def can_maintain_leadership(self) -> bool:
         """Check if this node can maintain leadership.
@@ -196,6 +210,7 @@ class FailoverCoordinator:
         if self._current_state == NodeState.PRIMARY:
             self.leader_election.demote_from_leader()
             self._current_state = NodeState.REPLICA
+            self._emit_event(FailoverEventType.GRACEFUL_HANDOFF)
 
     def mark_healthy(self) -> None:
         """Mark this node as healthy.
@@ -228,3 +243,42 @@ class FailoverCoordinator:
             True if the node is healthy, False if unhealthy.
         """
         return self._healthy
+
+    def demote_for_health(self) -> None:
+        """Demote from PRIMARY due to health check failure.
+
+        Transitions from PRIMARY to REPLICA and emits a HEALTH_DEMOTION event.
+        This is a specific demotion path for health-triggered failovers.
+        Only has effect if currently PRIMARY.
+        """
+        if self._current_state == NodeState.PRIMARY:
+            self.leader_election.demote_from_leader()
+            self._current_state = NodeState.REPLICA
+            self._emit_event(FailoverEventType.HEALTH_DEMOTION)
+
+    def demote_for_quorum_loss(self) -> None:
+        """Demote from PRIMARY due to quorum loss.
+
+        Transitions from PRIMARY to REPLICA and emits a QUORUM_LOSS_DEMOTION event.
+        This is a specific demotion path for quorum-loss failovers.
+        Only has effect if currently PRIMARY.
+        """
+        if self._current_state == NodeState.PRIMARY:
+            self.leader_election.demote_from_leader()
+            self._current_state = NodeState.REPLICA
+            self._emit_event(FailoverEventType.QUORUM_LOSS_DEMOTION)
+
+    def _emit_event(
+        self,
+        event_type: FailoverEventType,
+        reason: str | None = None,
+    ) -> None:
+        """Emit a failover event if an emitter is configured.
+
+        Args:
+            event_type: The type of failover event.
+            reason: Optional reason for the event.
+        """
+        if self._event_emitter is not None:
+            event = FailoverEvent(event_type=event_type, reason=reason)
+            self._event_emitter.emit(event)

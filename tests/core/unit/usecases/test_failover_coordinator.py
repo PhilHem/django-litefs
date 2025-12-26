@@ -5,6 +5,7 @@ from hypothesis import given, strategies as st
 
 from litefs.usecases.failover_coordinator import FailoverCoordinator, NodeState
 from litefs.adapters.ports import LeaderElectionPort
+from litefs.domain.events import FailoverEvent, FailoverEventType
 
 
 class MockLeaderElectionPort:
@@ -191,6 +192,22 @@ class TestFailoverCoordinator:
         )
         coordinator.coordinate_transition()
         # Should execute without errors
+
+
+class MockEventEmitter:
+    """Mock implementation of EventEmitterPort for testing."""
+
+    def __init__(self) -> None:
+        """Initialize with empty event list."""
+        self.events: list[FailoverEvent] = []
+
+    def emit(self, event: FailoverEvent) -> None:
+        """Record emitted event."""
+        self.events.append(event)
+
+    def clear(self) -> None:
+        """Clear recorded events."""
+        self.events.clear()
 
 
 class MockRaftLeaderElectionPort(MockLeaderElectionPort):
@@ -509,3 +526,136 @@ class TestFailoverCoordinatorPBT:
             # Invariant: unhealthy nodes cannot be PRIMARY
             if not coordinator.is_healthy():
                 assert coordinator.can_become_leader() is False
+
+
+@pytest.mark.tier(1)
+@pytest.mark.tra("UseCase.FailoverCoordinator")
+class TestFailoverCoordinatorEventEmission:
+    """Test FailoverCoordinator event emission functionality."""
+
+    def test_event_emitter_is_optional(self) -> None:
+        """Test that event_emitter is optional (backward compatible)."""
+        port = MockLeaderElectionPort(is_elected=False)
+        # Should work without event_emitter
+        coordinator = FailoverCoordinator(leader_election=port)
+        coordinator.coordinate_transition()
+        assert coordinator.state == NodeState.REPLICA
+
+    def test_event_emitted_on_replica_to_primary_transition(self) -> None:
+        """Test that PROMOTED_TO_PRIMARY event is emitted on replica -> primary."""
+        port = MockLeaderElectionPort(is_elected=False)
+        emitter = MockEventEmitter()
+        coordinator = FailoverCoordinator(leader_election=port, event_emitter=emitter)
+        assert coordinator.state == NodeState.REPLICA
+
+        # Trigger transition
+        port.elect_as_leader()
+        coordinator.coordinate_transition()
+
+        assert coordinator.state == NodeState.PRIMARY
+        assert len(emitter.events) == 1
+        assert emitter.events[0].event_type == FailoverEventType.PROMOTED_TO_PRIMARY
+
+    def test_event_emitted_on_primary_to_replica_transition(self) -> None:
+        """Test that DEMOTED_TO_REPLICA event is emitted on primary -> replica."""
+        port = MockLeaderElectionPort(is_elected=True)
+        emitter = MockEventEmitter()
+        coordinator = FailoverCoordinator(leader_election=port, event_emitter=emitter)
+        assert coordinator.state == NodeState.PRIMARY
+        emitter.clear()  # Clear initial state events if any
+
+        # Trigger transition
+        port.demote_from_leader()
+        coordinator.coordinate_transition()
+
+        assert coordinator.state == NodeState.REPLICA
+        assert len(emitter.events) == 1
+        assert emitter.events[0].event_type == FailoverEventType.DEMOTED_TO_REPLICA
+
+    def test_health_demotion_emits_specific_event(self) -> None:
+        """Test that health-triggered demotion emits HEALTH_DEMOTION event."""
+        port = MockRaftLeaderElectionPort(is_elected=True, quorum_reached=True)
+        emitter = MockEventEmitter()
+        coordinator = FailoverCoordinator(leader_election=port, event_emitter=emitter)
+        assert coordinator.state == NodeState.PRIMARY
+        emitter.clear()
+
+        # Mark unhealthy and trigger health-aware demotion
+        coordinator.mark_unhealthy()
+        coordinator.demote_for_health()
+
+        assert coordinator.state == NodeState.REPLICA
+        # Should have HEALTH_DEMOTION event
+        health_events = [
+            e for e in emitter.events
+            if e.event_type == FailoverEventType.HEALTH_DEMOTION
+        ]
+        assert len(health_events) == 1
+
+    def test_quorum_loss_demotion_emits_specific_event(self) -> None:
+        """Test that quorum-loss demotion emits QUORUM_LOSS_DEMOTION event."""
+        port = MockRaftLeaderElectionPort(is_elected=True, quorum_reached=True)
+        emitter = MockEventEmitter()
+        coordinator = FailoverCoordinator(leader_election=port, event_emitter=emitter)
+        assert coordinator.state == NodeState.PRIMARY
+        emitter.clear()
+
+        # Lose quorum and trigger quorum-aware demotion
+        port.quorum_reached = False
+        coordinator.demote_for_quorum_loss()
+
+        assert coordinator.state == NodeState.REPLICA
+        # Should have QUORUM_LOSS_DEMOTION event
+        quorum_events = [
+            e for e in emitter.events
+            if e.event_type == FailoverEventType.QUORUM_LOSS_DEMOTION
+        ]
+        assert len(quorum_events) == 1
+
+    def test_no_duplicate_events_on_repeated_transitions(self) -> None:
+        """Test that no duplicate events are emitted on idempotent transitions."""
+        port = MockLeaderElectionPort(is_elected=False)
+        emitter = MockEventEmitter()
+        coordinator = FailoverCoordinator(leader_election=port, event_emitter=emitter)
+        emitter.clear()
+
+        # Call coordinate_transition multiple times without state change
+        for _ in range(5):
+            coordinator.coordinate_transition()
+
+        # No events should be emitted since state didn't change
+        assert len(emitter.events) == 0
+
+    def test_graceful_handoff_emits_event(self) -> None:
+        """Test that graceful handoff emits GRACEFUL_HANDOFF event."""
+        port = MockRaftLeaderElectionPort(is_elected=True, quorum_reached=True)
+        emitter = MockEventEmitter()
+        coordinator = FailoverCoordinator(leader_election=port, event_emitter=emitter)
+        assert coordinator.state == NodeState.PRIMARY
+        emitter.clear()
+
+        # Perform graceful handoff
+        coordinator.perform_graceful_handoff()
+
+        assert coordinator.state == NodeState.REPLICA
+        # Should have GRACEFUL_HANDOFF event
+        handoff_events = [
+            e for e in emitter.events
+            if e.event_type == FailoverEventType.GRACEFUL_HANDOFF
+        ]
+        assert len(handoff_events) == 1
+
+    def test_no_event_when_graceful_handoff_from_replica(self) -> None:
+        """Test that graceful handoff from REPLICA state emits no event."""
+        port = MockLeaderElectionPort(is_elected=False)
+        emitter = MockEventEmitter()
+        coordinator = FailoverCoordinator(leader_election=port, event_emitter=emitter)
+        assert coordinator.state == NodeState.REPLICA
+        emitter.clear()
+
+        # Attempt graceful handoff from replica (no-op)
+        coordinator.perform_graceful_handoff()
+
+        # No events should be emitted
+        assert len(emitter.events) == 0
+        assert coordinator.state == NodeState.REPLICA

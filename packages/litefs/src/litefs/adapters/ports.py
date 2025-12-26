@@ -10,6 +10,7 @@ import os
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from litefs.domain.events import FailoverEvent
     from litefs.domain.split_brain import RaftClusterState
 
 
@@ -208,6 +209,29 @@ class SplitBrainDetectorPort(Protocol):
         Raises:
             May raise exceptions if cluster state cannot be determined
             (e.g., network unavailable, consensus lost).
+        """
+        ...
+
+
+@runtime_checkable
+class EventEmitterPort(Protocol):
+    """Port interface for emitting failover events.
+
+    Implementations handle event delivery to observers (logging, metrics, callbacks).
+    Abstracts the event delivery mechanism from the coordinator that emits events.
+
+    Contract:
+        - emit(event) delivers the event to all registered observers
+        - emit() is fire-and-forget (no return value, no exceptions propagated)
+        - Implementations may buffer, deduplicate, or transform events
+        - Thread safety is implementation-defined
+    """
+
+    def emit(self, event: FailoverEvent) -> None:
+        """Emit a failover event to observers.
+
+        Args:
+            event: The FailoverEvent to emit.
         """
         ...
 
