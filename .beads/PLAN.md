@@ -18,9 +18,9 @@ Session: beads-work-001
 | 7 | Handle Discovered Issues | orchestrator | ✅ done | none |
 | 8 | Final Verification | orchestrator | ✅ done | 223 passed |
 | 9 | Summary & Wait | orchestrator | ✅ done | **HARD STOP** |
-| 10 | User-Approved Commit | orchestrator | ⏳ pending | after user says "commit" |
+| 10 | User-Approved Commit | orchestrator | ✅ done | committed & pushed |
 
-**Current Phase: 9 (Summary & Wait for user approval)**
+**Current Phase: 10 (Complete)**
 
 ---
 
