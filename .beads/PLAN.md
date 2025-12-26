@@ -1,6 +1,6 @@
 # Beads Work Plan
-Generated: 2025-12-26T08:00:00Z
-Session: beads-work-001
+Generated: 2025-12-26T14:00:00
+Session: beads-work-paa
 
 ---
 
@@ -9,53 +9,65 @@ Session: beads-work-001
 | # | Phase | Agent | Status | Notes |
 |---|-------|-------|--------|-------|
 | 0 | Initialize Plan | orchestrator | ✅ done | |
-| 1 | Discovery | haiku (5+) | ✅ done | 5 agents completed |
+| 1 | Discovery | haiku (5+) | ✅ done | 6 agents |
 | 2 | Update Plan | orchestrator | ✅ done | |
-| 3 | Execute Tasks | beads-task-worker | ✅ done | 2 workers completed |
-| 4 | Validate Workers | orchestrator | ✅ done | both valid |
+| 3 | Execute Tasks | beads-task-worker | ✅ done | worker-a |
+| 4 | Validate Workers | orchestrator | ✅ done | validated |
 | 5 | Review Changes | beads-reviewer (opus) | ✅ done | PASSED |
-| 6 | Close Tasks | orchestrator | ✅ done | 3 tasks closed |
-| 7 | Handle Discovered Issues | orchestrator | ✅ done | none |
-| 8 | Final Verification | orchestrator | ✅ done | 223 passed |
+| 6 | Close Tasks | orchestrator | ✅ done | 1 task |
+| 7 | Handle Discovered Issues | orchestrator | ✅ done | none new |
+| 8 | Final Verification | orchestrator | ✅ done | 340 tests |
 | 9 | Summary & Wait | orchestrator | ✅ done | **HARD STOP** |
-| 10 | User-Approved Commit | orchestrator | ✅ done | committed & pushed |
+| 10 | User-Approved Commit | orchestrator | ⏳ pending | after user says "commit" |
 
-**Current Phase: 10 (Complete)**
+**Current Phase: 9**
+
+---
+
+## User Request
+Task: `django-litefs-paa` - Add event emission to FailoverCoordinator
 
 ---
 
 ## 1. Discovery Results
 Status: ✅ done
 
-### Epics Found
-- **django-litefs-8xq**: Architecture Review Actions [P1] (all 9 subtasks closed, epic ready to close)
-- **orphan tasks**: 2 tasks without parent epic
+### Task Details
+- **ID**: django-litefs-paa
+- **Title**: Add event emission to FailoverCoordinator
+- **Description**: FailoverCoordinator needs to emit events for state transitions. Scenarios require: health-triggered demotion event, quorum-loss demotion event, and detection of redundant state changes. Add event_callback or observer pattern to FailoverCoordinator.
+- **Blocks**: django-litefs-mel (step definitions), django-litefs-smz (BDD feature)
 
-### Ready Tasks
-| ID | Title | Type | Priority | Blocked By |
-|----|-------|------|----------|------------|
-| django-litefs-8xq | Architecture Review Actions | epic | P1 | none (9/9 children closed) |
-| django-litefs-21o | Document read-your-writes consistency pattern | task | P2 | django-litefs-cux (CLOSED) |
-| django-litefs-zre | Add missing @pytest.mark.tier() to test_adapters.py | task | P3 | none |
+### FailoverCoordinator Analysis
+- **File**: packages/litefs/src/litefs/usecases/failover_coordinator.py
+- **State transition points**:
+  - `coordinate_transition`: PRIMARY→REPLICA when not elected, REPLICA→PRIMARY when elected
+  - `perform_graceful_handoff`: PRIMARY→REPLICA with demote_from_leader() call
+- **Event emission points needed**:
+  - State change events (PRIMARY↔REPLICA transitions)
+  - Health-triggered demotion event
+  - Quorum-loss demotion event
 
-### Conflict Matrix
-**PARALLEL_SAFE**: All three tasks can run in parallel
-- django-litefs-8xq: Epic summary (no file changes)
-- django-litefs-21o: .claude/docs/CONSISTENCY.md (create), DEPLOYMENT.md, README.md
-- django-litefs-zre: tests/django_adapter/unit/test_adapters.py
+### Domain Layer
+- No existing event types in domain layer
+- Pattern: Frozen dataclass value objects with __post_init__ validation
+- Recommended location: `packages/litefs/src/litefs/domain/events.py`
 
-**SEQUENTIAL_REQUIRED**: None
+### Ports Layer
+- Pattern: Protocol classes (runtime_checkable)
+- Existing ports: PrimaryDetectorPort, NodeIDResolverPort, LeaderElectionPort, RaftLeaderElectionPort, SplitBrainDetectorPort
+- Naming: `<Capability>Port`
+
+### BDD Scenarios (from failover_transitions.feature)
+Required events:
+- health-triggered demotion event (PRIMARY→REPLICA on health failure)
+- quorum-loss demotion event (PRIMARY→REPLICA on quorum loss)
+- state change events (suppressed on idempotent runs)
 
 ### Baseline Test Status
-- **TEST_COUNT**: 254
-- **BASELINE_STATUS**: pass (223 passed, 31 skipped)
-- **PRE_EXISTING_FAILURES**: none
-
-### Dependency Context
-- **django-litefs-cux** (CLOSED): Implemented ProxySettings domain object
-  - File: packages/litefs/src/litefs/domain/settings.py
-  - Fields: addr, target, db (required), passthrough, primary_redirect_timeout (optional)
-  - Django adapter reads from LITEFS['PROXY'] dict
+- **Unit tests**: 332 passed
+- **Integration tests**: 12 errors (pre-existing ClusterFixture import issue)
+- **Status**: PASS for unit tests
 
 ---
 
@@ -64,20 +76,12 @@ Status: ✅ done
 
 | ID | Title | Epic | Status | Worker | Files | Respawns |
 |----|-------|------|--------|--------|-------|----------|
-| django-litefs-8xq | Architecture Review Actions | - | ready (close) | - | - | 0 |
-| django-litefs-21o | Document read-your-writes consistency | orphan | ready | pending | CONSISTENCY.md, DEPLOYMENT.md, README.md | 0 |
-| django-litefs-zre | Add tier markers to test_adapters.py | orphan | ready | pending | test_adapters.py | 0 |
+| django-litefs-paa | Add event emission to FailoverCoordinator | orphan | worker_done | worker-a | events.py, ports.py, failover_coordinator.py, test_failover_coordinator.py | 0 |
 
 ---
 
 ## 3. Execution Log
-- 2025-12-26T08:00:00Z: Plan initialized
-- 2025-12-26T08:00:00Z: Initial bd ready found 3 issues
-- 2025-12-26T08:01:00Z: Discovery phase complete (5 haiku agents)
-- 2025-12-26T08:01:30Z: Plan updated with discovery results
-- 2025-12-26T08:02:00Z: Workers spawned (2 parallel)
-- 2025-12-26T08:03:00Z: Workers completed
-- 2025-12-26T08:03:30Z: Validation complete - both workers valid
+- 2025-12-26T14:00:00: Plan initialized
 
 ---
 
@@ -86,8 +90,7 @@ Status: ✅ done
 
 | Task | Tests Run | Tests Passed | Mypy Passed | Valid |
 |------|-----------|--------------|-------------|-------|
-| django-litefs-zre | yes | yes | yes | ✅ |
-| django-litefs-21o | na (docs) | na | na | ✅ |
+| django-litefs-paa | yes (340 tests) | yes | yes (pre-existing yaml stubs) | ✅ |
 
 ---
 
@@ -96,30 +99,26 @@ Status: ✅ done
 
 | Epic | Reviewer | Status | Warnings | Respawns |
 |------|----------|--------|----------|----------|
-| orphan tasks | opus | PASSED | 0 | 0 |
-
-**Non-blocking observation**: CONSISTENCY.md references future docs (SPLIT_BRAIN_ANALYSIS.md, RAFT_CONFIGURATION.md)
+| orphan | opus | PASSED | 0 | 0 |
 
 ---
 
 ## 6. Closed Tasks
-- django-litefs-zre: Add missing @pytest.mark.tier() to test_adapters.py ✅
-- django-litefs-21o: Document read-your-writes consistency pattern ✅
-- django-litefs-8xq: Architecture Review Actions (epic) ✅
+- django-litefs-paa: Add event emission to FailoverCoordinator ✅
 
 ---
 
 ## 7. Discovered Issues
-None
+None discovered (pre-existing TRA anchor issues already tracked)
 
 ---
 
 ## 8. Final Verification
 Status: ✅ done
 
-- [x] Full test suite passed (223 passed, 31 skipped)
-- [x] Python syntax verified
-- [x] Pre-existing failures tracked: none
+- [x] Full test suite passed (340 tests)
+- [x] Mypy passed (2 pre-existing yaml stub errors)
+- [x] Pre-existing failures tracked (ClusterFixture import, yaml stubs)
 
 ---
 
@@ -127,23 +126,22 @@ Status: ✅ done
 Status: ✅ done
 
 ### Tasks Completed
-- **django-litefs-zre**: Add missing @pytest.mark.tier() to test_adapters.py ✓
-- **django-litefs-21o**: Document read-your-writes consistency pattern with LiteFS proxy ✓
-- **django-litefs-8xq**: Architecture Review Actions (epic, all 9 children closed) ✓
+- django-litefs-paa: Add event emission to FailoverCoordinator ✅
 
 ### Quality Gates
-- Tests passed: ✓ (223 passed, 31 skipped)
-- Review passed: ✓
-- TRA compliant: ✓
+- Tests passed: ✅ (340 passed, 8 new tests added)
+- Mypy passed: ✅ (pre-existing yaml stub errors only)
+- Review passed: ✅ (opus reviewer, 0 warnings)
 
 ### Files Modified
-- `tests/django_adapter/unit/test_adapters.py` - added tier(1) marker
-- `.claude/docs/CONSISTENCY.md` - **NEW** (438 lines)
-- `.claude/docs/DEPLOYMENT.md` - added reference to CONSISTENCY.md
-- `packages/litefs-django/README.md` - added proxy quick-start section
+- packages/litefs/src/litefs/domain/events.py (new)
+- packages/litefs/src/litefs/adapters/ports.py (EventEmitterPort added)
+- packages/litefs/src/litefs/usecases/failover_coordinator.py
+- tests/core/unit/usecases/test_failover_coordinator.py (8 new tests)
 
-### New Issues Created
-None
-
-### Workflow Inefficiencies
-None
+### Implementation Summary
+- FailoverEvent frozen dataclass with FailoverEventType enum
+- EventEmitterPort Protocol interface added
+- FailoverCoordinator now accepts optional event_emitter
+- New methods: demote_for_health(), demote_for_quorum_loss()
+- Events emitted on all state transitions (idempotent)
