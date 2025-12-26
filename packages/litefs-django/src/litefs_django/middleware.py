@@ -26,12 +26,13 @@ Usage:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from django.http import HttpResponse, HttpRequest
 from django.conf import settings as django_settings
 
 from litefs.usecases.split_brain_detector import SplitBrainDetector
+from litefs.adapters.ports import SplitBrainDetectorPort
 from litefs_django.signals import split_brain_detected
 
 if TYPE_CHECKING:
@@ -108,8 +109,8 @@ class SplitBrainMiddleware:
             # Use PrimaryDetector's port for cluster state access
             detector_port = PrimaryDetector(litefs_settings.mount_path)
 
-            # Verify port has required method
-            if not hasattr(detector_port, "get_cluster_state"):
+            # Verify port implements SplitBrainDetectorPort Protocol
+            if not isinstance(detector_port, SplitBrainDetectorPort):
                 logger.warning(
                     "PrimaryDetector does not implement SplitBrainDetectorPort. "
                     "Split-brain detection unavailable."

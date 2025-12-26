@@ -2,6 +2,7 @@
 
 import logging
 from pathlib import Path
+from typing import Optional, Callable, Any
 
 from django.apps import AppConfig
 from django.conf import settings as django_settings
@@ -10,9 +11,31 @@ from litefs_django.settings import get_litefs_settings
 from litefs.usecases.mount_validator import MountValidator
 from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningError
 from litefs.usecases.primary_initializer import PrimaryInitializer
-from litefs.adapters.ports import EnvironmentNodeIDResolver
+from litefs.adapters.ports import EnvironmentNodeIDResolver, NodeIDResolverPort
 
 logger = logging.getLogger(__name__)
+
+
+def _default_mount_validator_factory() -> MountValidator:
+    """Default factory for creating MountValidator instances."""
+    return MountValidator()
+
+
+def _default_node_id_resolver_factory() -> NodeIDResolverPort:
+    """Default factory for creating NodeIDResolver instances."""
+    return EnvironmentNodeIDResolver()
+
+
+def _default_primary_initializer_factory(
+    static_leader_config: Any,
+) -> PrimaryInitializer:
+    """Default factory for creating PrimaryInitializer instances."""
+    return PrimaryInitializer(static_leader_config)
+
+
+def _default_primary_detector_factory(mount_path: str) -> PrimaryDetector:
+    """Default factory for creating PrimaryDetector instances."""
+    return PrimaryDetector(mount_path)
 
 
 class LiteFSDjangoConfig(AppConfig):
@@ -22,7 +45,19 @@ class LiteFSDjangoConfig(AppConfig):
     name = "litefs_django"
     verbose_name = "LiteFS Django Adapter"
 
-    def ready(self):
+    # Dependency injection factories (can be overridden for testing)
+    mount_validator_factory: Callable[[], MountValidator] = _default_mount_validator_factory
+    node_id_resolver_factory: Callable[[], NodeIDResolverPort] = (
+        _default_node_id_resolver_factory
+    )
+    primary_initializer_factory: Callable[
+        [Any], PrimaryInitializer
+    ] = _default_primary_initializer_factory
+    primary_detector_factory: Callable[
+        [str], PrimaryDetector
+    ] = _default_primary_detector_factory
+
+    def ready(self) -> None:
         """Validate LiteFS settings and check availability on startup."""
         # Only validate if LiteFS is enabled
         litefs_config = getattr(django_settings, "LITEFS", None)
@@ -43,7 +78,7 @@ class LiteFSDjangoConfig(AppConfig):
 
             # Check if LiteFS mount path exists using MountValidator
             mount_path = Path(litefs_settings.mount_path)
-            validator = MountValidator()
+            validator = self.mount_validator_factory()
             try:
                 validator.validate(mount_path)
             except Exception as e:
@@ -66,11 +101,13 @@ class LiteFSDjangoConfig(AppConfig):
 
                     try:
                         # Resolve current node's ID
-                        resolver = EnvironmentNodeIDResolver()
+                        resolver = self.node_id_resolver_factory()
                         current_node_id = resolver.resolve_node_id()
 
                         # Determine if this node is primary
-                        initializer = PrimaryInitializer(litefs_settings.static_leader_config)
+                        initializer = self.primary_initializer_factory(
+                            litefs_settings.static_leader_config
+                        )
                         is_primary = initializer.is_primary(current_node_id)
 
                         logger.info(
@@ -84,7 +121,7 @@ class LiteFSDjangoConfig(AppConfig):
                         )
                 else:
                     # Raft mode: use PrimaryDetector for runtime detection
-                    detector = PrimaryDetector(litefs_settings.mount_path)
+                    detector = self.primary_detector_factory(litefs_settings.mount_path)
                     is_primary = detector.is_primary()
                     logger.info(
                         f"LiteFS initialized (raft mode). Node is "

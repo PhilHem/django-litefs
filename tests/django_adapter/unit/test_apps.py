@@ -30,109 +30,99 @@ class TestLiteFSDjangoConfigReady:
         with caplog.at_level(logging.INFO):
             with patch("litefs_django.apps.getattr") as mock_getattr:
                 with patch("litefs_django.apps.get_litefs_settings") as mock_get_settings:
-                    with patch("litefs_django.apps.MountValidator") as mock_validator_class:
-                        with patch("litefs_django.apps.PrimaryInitializer") as mock_initializer_class:
-                            with patch("litefs_django.apps.EnvironmentNodeIDResolver") as mock_resolver_class:
-                                # Setup mocks
-                                mock_getattr.return_value = {
-                                    "MOUNT_PATH": "/litefs",
-                                    "DATA_PATH": "/var/lib/litefs",
-                                    "DATABASE_NAME": "db.sqlite3",
-                                    "LEADER_ELECTION": "static",
-                                    "PROXY_ADDR": ":8080",
-                                    "ENABLED": True,
-                                    "RETENTION": "1h",
-                                    "PRIMARY_HOSTNAME": "primary-node",
-                                }
+                    # Setup mocks
+                    mock_getattr.return_value = {
+                        "MOUNT_PATH": "/litefs",
+                        "DATA_PATH": "/var/lib/litefs",
+                        "DATABASE_NAME": "db.sqlite3",
+                        "LEADER_ELECTION": "static",
+                        "PROXY_ADDR": ":8080",
+                        "ENABLED": True,
+                        "RETENTION": "1h",
+                        "PRIMARY_HOSTNAME": "primary-node",
+                    }
 
-                                # Create settings object with static config
-                                static_config = StaticLeaderConfig(primary_hostname="primary-node")
-                                settings = LiteFSSettings(
-                                    mount_path="/litefs",
-                                    data_path="/var/lib/litefs",
-                                    database_name="db.sqlite3",
-                                    leader_election="static",
-                                    proxy_addr=":8080",
-                                    enabled=True,
-                                    retention="1h",
-                                    static_leader_config=static_config,
-                                )
-                                mock_get_settings.return_value = settings
+                    # Create settings object with static config
+                    static_config = StaticLeaderConfig(primary_hostname="primary-node")
+                    settings = LiteFSSettings(
+                        mount_path="/litefs",
+                        data_path="/var/lib/litefs",
+                        database_name="db.sqlite3",
+                        leader_election="static",
+                        proxy_addr=":8080",
+                        enabled=True,
+                        retention="1h",
+                        static_leader_config=static_config,
+                    )
+                    mock_get_settings.return_value = settings
 
-                                # Setup validator mock
-                                mock_validator = MagicMock()
-                                mock_validator_class.return_value = mock_validator
+                    # Setup mocks for injected factories
+                    mock_validator = MagicMock()
+                    mock_resolver = MagicMock()
+                    mock_resolver.resolve_node_id.return_value = "primary-node"
+                    mock_initializer = MagicMock()
+                    mock_initializer.is_primary.return_value = True
 
-                                # Setup resolver mock
-                                mock_resolver = MagicMock()
-                                mock_resolver.resolve_node_id.return_value = "primary-node"
-                                mock_resolver_class.return_value = mock_resolver
+                    # Call ready() using test config with injected factories
+                    config = create_test_config()
+                    config.mount_validator_factory = MagicMock(return_value=mock_validator)
+                    config.node_id_resolver_factory = MagicMock(return_value=mock_resolver)
+                    config.primary_initializer_factory = MagicMock(return_value=mock_initializer)
+                    config.ready()
 
-                                # Setup initializer mock
-                                mock_initializer = MagicMock()
-                                mock_initializer.is_primary.return_value = True
-                                mock_initializer_class.return_value = mock_initializer
-
-                                # Call ready() using test config
-                                config = create_test_config()
-                                config.ready()
-
-                                # Verify PrimaryInitializer was instantiated and called
-                                mock_initializer_class.assert_called_once()
-                                mock_initializer.is_primary.assert_called_once_with("primary-node")
-                                mock_resolver.resolve_node_id.assert_called_once()
+                    # Verify factories were called
+                    config.node_id_resolver_factory.assert_called_once()
+                    config.primary_initializer_factory.assert_called_once()
+                    mock_initializer.is_primary.assert_called_once_with("primary-node")
+                    mock_resolver.resolve_node_id.assert_called_once()
 
     def test_runtime_leader_election_uses_primary_detector(self, caplog):
         """Test that raft mode uses PrimaryDetector for runtime detection."""
         with caplog.at_level(logging.INFO):
             with patch("litefs_django.apps.getattr") as mock_getattr:
                 with patch("litefs_django.apps.get_litefs_settings") as mock_get_settings:
-                    with patch("litefs_django.apps.MountValidator") as mock_validator_class:
-                        with patch("litefs_django.apps.PrimaryDetector") as mock_detector_class:
-                            # Setup mocks
-                            mock_getattr.return_value = {
-                                "MOUNT_PATH": "/litefs",
-                                "DATA_PATH": "/var/lib/litefs",
-                                "DATABASE_NAME": "db.sqlite3",
-                                "LEADER_ELECTION": "raft",
-                                "PROXY_ADDR": ":8080",
-                                "ENABLED": True,
-                                "RETENTION": "1h",
-                                "RAFT_SELF_ADDR": "localhost:4321",
-                                "RAFT_PEERS": ["node1:4321", "node2:4321"],
-                            }
+                    # Setup mocks
+                    mock_getattr.return_value = {
+                        "MOUNT_PATH": "/litefs",
+                        "DATA_PATH": "/var/lib/litefs",
+                        "DATABASE_NAME": "db.sqlite3",
+                        "LEADER_ELECTION": "raft",
+                        "PROXY_ADDR": ":8080",
+                        "ENABLED": True,
+                        "RETENTION": "1h",
+                        "RAFT_SELF_ADDR": "localhost:4321",
+                        "RAFT_PEERS": ["node1:4321", "node2:4321"],
+                    }
 
-                            # Create settings object for raft mode
-                            settings = LiteFSSettings(
-                                mount_path="/litefs",
-                                data_path="/var/lib/litefs",
-                                database_name="db.sqlite3",
-                                leader_election="raft",
-                                proxy_addr=":8080",
-                                enabled=True,
-                                retention="1h",
-                                raft_self_addr="localhost:4321",
-                                raft_peers=["node1:4321", "node2:4321"],
-                                static_leader_config=None,
-                            )
-                            mock_get_settings.return_value = settings
+                    # Create settings object for raft mode
+                    settings = LiteFSSettings(
+                        mount_path="/litefs",
+                        data_path="/var/lib/litefs",
+                        database_name="db.sqlite3",
+                        leader_election="raft",
+                        proxy_addr=":8080",
+                        enabled=True,
+                        retention="1h",
+                        raft_self_addr="localhost:4321",
+                        raft_peers=["node1:4321", "node2:4321"],
+                        static_leader_config=None,
+                    )
+                    mock_get_settings.return_value = settings
 
-                            # Setup validator mock
-                            mock_validator = MagicMock()
-                            mock_validator_class.return_value = mock_validator
+                    # Setup validator and detector mocks
+                    mock_validator = MagicMock()
+                    mock_detector = MagicMock()
+                    mock_detector.is_primary.return_value = False
 
-                            # Setup detector mock
-                            mock_detector = MagicMock()
-                            mock_detector.is_primary.return_value = False
-                            mock_detector_class.return_value = mock_detector
+                    # Call ready() with injected factories
+                    config = create_test_config()
+                    config.mount_validator_factory = MagicMock(return_value=mock_validator)
+                    config.primary_detector_factory = MagicMock(return_value=mock_detector)
+                    config.ready()
 
-                            # Call ready()
-                            config = create_test_config()
-                            config.ready()
-
-                            # Verify PrimaryDetector was instantiated and called
-                            mock_detector_class.assert_called_once_with("/litefs")
-                            mock_detector.is_primary.assert_called_once()
+                    # Verify detector factory was called
+                    config.primary_detector_factory.assert_called_once_with("/litefs")
+                    mock_detector.is_primary.assert_called_once()
 
     def test_static_mode_logs_primary_status(self, caplog):
         """Test that static mode logs the result of primary detection."""
@@ -190,96 +180,90 @@ class TestLiteFSDjangoConfigReady:
         with caplog.at_level(logging.WARNING):
             with patch("litefs_django.apps.getattr") as mock_getattr:
                 with patch("litefs_django.apps.get_litefs_settings") as mock_get_settings:
-                    with patch("litefs_django.apps.MountValidator") as mock_validator_class:
-                        with patch("litefs_django.apps.EnvironmentNodeIDResolver") as mock_resolver_class:
-                            # Setup mocks
-                            mock_getattr.return_value = {
-                                "MOUNT_PATH": "/litefs",
-                                "DATA_PATH": "/var/lib/litefs",
-                                "DATABASE_NAME": "db.sqlite3",
-                                "LEADER_ELECTION": "static",
-                                "PROXY_ADDR": ":8080",
-                                "ENABLED": True,
-                                "RETENTION": "1h",
-                                "PRIMARY_HOSTNAME": "primary-node",
-                            }
+                    # Setup mocks
+                    mock_getattr.return_value = {
+                        "MOUNT_PATH": "/litefs",
+                        "DATA_PATH": "/var/lib/litefs",
+                        "DATABASE_NAME": "db.sqlite3",
+                        "LEADER_ELECTION": "static",
+                        "PROXY_ADDR": ":8080",
+                        "ENABLED": True,
+                        "RETENTION": "1h",
+                        "PRIMARY_HOSTNAME": "primary-node",
+                    }
 
-                            static_config = StaticLeaderConfig(primary_hostname="primary-node")
-                            settings = LiteFSSettings(
-                                mount_path="/litefs",
-                                data_path="/var/lib/litefs",
-                                database_name="db.sqlite3",
-                                leader_election="static",
-                                proxy_addr=":8080",
-                                enabled=True,
-                                retention="1h",
-                                static_leader_config=static_config,
-                            )
-                            mock_get_settings.return_value = settings
+                    static_config = StaticLeaderConfig(primary_hostname="primary-node")
+                    settings = LiteFSSettings(
+                        mount_path="/litefs",
+                        data_path="/var/lib/litefs",
+                        database_name="db.sqlite3",
+                        leader_election="static",
+                        proxy_addr=":8080",
+                        enabled=True,
+                        retention="1h",
+                        static_leader_config=static_config,
+                    )
+                    mock_get_settings.return_value = settings
 
-                            mock_validator = MagicMock()
-                            mock_validator_class.return_value = mock_validator
+                    # Make resolver raise KeyError (missing LITEFS_NODE_ID)
+                    mock_validator = MagicMock()
+                    mock_resolver = MagicMock()
+                    mock_resolver.resolve_node_id.side_effect = KeyError("LITEFS_NODE_ID")
 
-                            # Make resolver raise KeyError (missing LITEFS_NODE_ID)
-                            mock_resolver = MagicMock()
-                            mock_resolver.resolve_node_id.side_effect = KeyError("LITEFS_NODE_ID")
-                            mock_resolver_class.return_value = mock_resolver
+                    # Call ready() - should not raise, just warn
+                    config = create_test_config()
+                    config.mount_validator_factory = MagicMock(return_value=mock_validator)
+                    config.node_id_resolver_factory = MagicMock(return_value=mock_resolver)
+                    config.ready()
 
-                            # Call ready() - should not raise, just warn
-                            config = create_test_config()
-                            config.ready()
-
-                            # Verify warning was logged
-                            assert any("node_id" in record.message.lower() or "litefs_node_id" in record.message.lower()
-                                      for record in caplog.records if record.levelno >= logging.WARNING)
+                    # Verify warning was logged
+                    assert any("node_id" in record.message.lower() or "litefs_node_id" in record.message.lower()
+                              for record in caplog.records if record.levelno >= logging.WARNING)
 
     def test_static_mode_handles_invalid_node_id(self, caplog):
         """Test that static mode handles invalid LITEFS_NODE_ID with warning."""
         with caplog.at_level(logging.WARNING):
             with patch("litefs_django.apps.getattr") as mock_getattr:
                 with patch("litefs_django.apps.get_litefs_settings") as mock_get_settings:
-                    with patch("litefs_django.apps.MountValidator") as mock_validator_class:
-                        with patch("litefs_django.apps.EnvironmentNodeIDResolver") as mock_resolver_class:
-                            # Setup mocks
-                            mock_getattr.return_value = {
-                                "MOUNT_PATH": "/litefs",
-                                "DATA_PATH": "/var/lib/litefs",
-                                "DATABASE_NAME": "db.sqlite3",
-                                "LEADER_ELECTION": "static",
-                                "PROXY_ADDR": ":8080",
-                                "ENABLED": True,
-                                "RETENTION": "1h",
-                                "PRIMARY_HOSTNAME": "primary-node",
-                            }
+                    # Setup mocks
+                    mock_getattr.return_value = {
+                        "MOUNT_PATH": "/litefs",
+                        "DATA_PATH": "/var/lib/litefs",
+                        "DATABASE_NAME": "db.sqlite3",
+                        "LEADER_ELECTION": "static",
+                        "PROXY_ADDR": ":8080",
+                        "ENABLED": True,
+                        "RETENTION": "1h",
+                        "PRIMARY_HOSTNAME": "primary-node",
+                    }
 
-                            static_config = StaticLeaderConfig(primary_hostname="primary-node")
-                            settings = LiteFSSettings(
-                                mount_path="/litefs",
-                                data_path="/var/lib/litefs",
-                                database_name="db.sqlite3",
-                                leader_election="static",
-                                proxy_addr=":8080",
-                                enabled=True,
-                                retention="1h",
-                                static_leader_config=static_config,
-                            )
-                            mock_get_settings.return_value = settings
+                    static_config = StaticLeaderConfig(primary_hostname="primary-node")
+                    settings = LiteFSSettings(
+                        mount_path="/litefs",
+                        data_path="/var/lib/litefs",
+                        database_name="db.sqlite3",
+                        leader_election="static",
+                        proxy_addr=":8080",
+                        enabled=True,
+                        retention="1h",
+                        static_leader_config=static_config,
+                    )
+                    mock_get_settings.return_value = settings
 
-                            mock_validator = MagicMock()
-                            mock_validator_class.return_value = mock_validator
+                    # Make resolver raise ValueError (empty node ID)
+                    mock_validator = MagicMock()
+                    mock_resolver = MagicMock()
+                    mock_resolver.resolve_node_id.side_effect = ValueError("node ID cannot be empty")
 
-                            # Make resolver raise ValueError (empty node ID)
-                            mock_resolver = MagicMock()
-                            mock_resolver.resolve_node_id.side_effect = ValueError("node ID cannot be empty")
-                            mock_resolver_class.return_value = mock_resolver
+                    # Call ready() - should not raise, just warn
+                    config = create_test_config()
+                    config.mount_validator_factory = MagicMock(return_value=mock_validator)
+                    config.node_id_resolver_factory = MagicMock(return_value=mock_resolver)
+                    config.ready()
 
-                            # Call ready() - should not raise, just warn
-                            config = create_test_config()
-                            config.ready()
-
-                            # Verify warning was logged
-                            assert any("node_id" in record.message.lower() or "invalid" in record.message.lower()
-                                      for record in caplog.records if record.levelno >= logging.WARNING)
+                    # Verify warning was logged
+                    assert any("node_id" in record.message.lower() or "invalid" in record.message.lower()
+                              for record in caplog.records if record.levelno >= logging.WARNING)
 
     def test_raft_mode_logs_primary_status(self, caplog):
         """Test that raft mode logs the result of primary detection."""
@@ -334,50 +318,48 @@ class TestLiteFSDjangoConfigReady:
         with caplog.at_level(logging.WARNING):
             with patch("litefs_django.apps.getattr") as mock_getattr:
                 with patch("litefs_django.apps.get_litefs_settings") as mock_get_settings:
-                    with patch("litefs_django.apps.MountValidator") as mock_validator_class:
-                        with patch("litefs_django.apps.PrimaryDetector") as mock_detector_class:
-                            # Setup mocks
-                            mock_getattr.return_value = {
-                                "MOUNT_PATH": "/litefs",
-                                "DATA_PATH": "/var/lib/litefs",
-                                "DATABASE_NAME": "db.sqlite3",
-                                "LEADER_ELECTION": "raft",
-                                "PROXY_ADDR": ":8080",
-                                "ENABLED": True,
-                                "RETENTION": "1h",
-                                "RAFT_SELF_ADDR": "localhost:4321",
-                                "RAFT_PEERS": ["node1:4321"],
-                            }
+                    # Setup mocks
+                    mock_getattr.return_value = {
+                        "MOUNT_PATH": "/litefs",
+                        "DATA_PATH": "/var/lib/litefs",
+                        "DATABASE_NAME": "db.sqlite3",
+                        "LEADER_ELECTION": "raft",
+                        "PROXY_ADDR": ":8080",
+                        "ENABLED": True,
+                        "RETENTION": "1h",
+                        "RAFT_SELF_ADDR": "localhost:4321",
+                        "RAFT_PEERS": ["node1:4321"],
+                    }
 
-                            settings = LiteFSSettings(
-                                mount_path="/litefs",
-                                data_path="/var/lib/litefs",
-                                database_name="db.sqlite3",
-                                leader_election="raft",
-                                proxy_addr=":8080",
-                                enabled=True,
-                                retention="1h",
-                                raft_self_addr="localhost:4321",
-                                raft_peers=["node1:4321"],
-                                static_leader_config=None,
-                            )
-                            mock_get_settings.return_value = settings
+                    settings = LiteFSSettings(
+                        mount_path="/litefs",
+                        data_path="/var/lib/litefs",
+                        database_name="db.sqlite3",
+                        leader_election="raft",
+                        proxy_addr=":8080",
+                        enabled=True,
+                        retention="1h",
+                        raft_self_addr="localhost:4321",
+                        raft_peers=["node1:4321"],
+                        static_leader_config=None,
+                    )
+                    mock_get_settings.return_value = settings
 
-                            mock_validator = MagicMock()
-                            mock_validator_class.return_value = mock_validator
+                    mock_validator = MagicMock()
 
-                            # Make detector raise LiteFSNotRunningError
-                            mock_detector = MagicMock()
-                            mock_detector.is_primary.side_effect = LiteFSNotRunningError("LiteFS is not running")
-                            mock_detector_class.return_value = mock_detector
+                    # Make detector raise LiteFSNotRunningError
+                    mock_detector = MagicMock()
+                    mock_detector.is_primary.side_effect = LiteFSNotRunningError("LiteFS is not running")
 
-                            # Call ready() - should not raise, just warn
-                            config = create_test_config()
-                            config.ready()
+                    # Call ready() - should not raise, just warn
+                    config = create_test_config()
+                    config.mount_validator_factory = MagicMock(return_value=mock_validator)
+                    config.primary_detector_factory = MagicMock(return_value=mock_detector)
+                    config.ready()
 
-                            # Verify warning was logged
-                            assert any("litefs" in record.message.lower() and "running" in record.message.lower()
-                                      for record in caplog.records if record.levelno >= logging.WARNING)
+                    # Verify warning was logged
+                    assert any("litefs" in record.message.lower() and "running" in record.message.lower()
+                              for record in caplog.records if record.levelno >= logging.WARNING)
 
     def test_disabled_litefs_returns_early(self, caplog):
         """Test that disabled LiteFS (ENABLED=False) returns early without processing."""
@@ -423,43 +405,42 @@ class TestLiteFSDjangoConfigReady:
         with caplog.at_level(logging.WARNING):
             with patch("litefs_django.apps.getattr") as mock_getattr:
                 with patch("litefs_django.apps.get_litefs_settings") as mock_get_settings:
-                    with patch("litefs_django.apps.MountValidator") as mock_validator_class:
-                        # Setup mocks
-                        mock_getattr.return_value = {
-                            "MOUNT_PATH": "/litefs",
-                            "DATA_PATH": "/var/lib/litefs",
-                            "DATABASE_NAME": "db.sqlite3",
-                            "LEADER_ELECTION": "raft",
-                            "PROXY_ADDR": ":8080",
-                            "ENABLED": True,
-                            "RETENTION": "1h",
-                            "RAFT_SELF_ADDR": "localhost:4321",
-                            "RAFT_PEERS": ["node1:4321"],
-                        }
+                    # Setup mocks
+                    mock_getattr.return_value = {
+                        "MOUNT_PATH": "/litefs",
+                        "DATA_PATH": "/var/lib/litefs",
+                        "DATABASE_NAME": "db.sqlite3",
+                        "LEADER_ELECTION": "raft",
+                        "PROXY_ADDR": ":8080",
+                        "ENABLED": True,
+                        "RETENTION": "1h",
+                        "RAFT_SELF_ADDR": "localhost:4321",
+                        "RAFT_PEERS": ["node1:4321"],
+                    }
 
-                        settings = LiteFSSettings(
-                            mount_path="/litefs",
-                            data_path="/var/lib/litefs",
-                            database_name="db.sqlite3",
-                            leader_election="raft",
-                            proxy_addr=":8080",
-                            enabled=True,
-                            retention="1h",
-                            raft_self_addr="localhost:4321",
-                            raft_peers=["node1:4321"],
-                            static_leader_config=None,
-                        )
-                        mock_get_settings.return_value = settings
+                    settings = LiteFSSettings(
+                        mount_path="/litefs",
+                        data_path="/var/lib/litefs",
+                        database_name="db.sqlite3",
+                        leader_election="raft",
+                        proxy_addr=":8080",
+                        enabled=True,
+                        retention="1h",
+                        raft_self_addr="localhost:4321",
+                        raft_peers=["node1:4321"],
+                        static_leader_config=None,
+                    )
+                    mock_get_settings.return_value = settings
 
-                        # Make validator raise exception
-                        mock_validator = MagicMock()
-                        mock_validator.validate.side_effect = Exception("Mount path not found")
-                        mock_validator_class.return_value = mock_validator
+                    # Make validator raise exception
+                    mock_validator = MagicMock()
+                    mock_validator.validate.side_effect = Exception("Mount path not found")
 
-                        # Call ready() - should not raise, just warn
-                        config = create_test_config()
-                        config.ready()
+                    # Call ready() - should not raise, just warn
+                    config = create_test_config()
+                    config.mount_validator_factory = MagicMock(return_value=mock_validator)
+                    config.ready()
 
-                        # Verify warning was logged about validation failure
-                        assert any("validation" in record.message.lower()
-                                  for record in caplog.records if record.levelno >= logging.WARNING)
+                    # Verify warning was logged about validation failure
+                    assert any("validation" in record.message.lower()
+                              for record in caplog.records if record.levelno >= logging.WARNING)

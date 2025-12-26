@@ -11,8 +11,9 @@ from django.views.decorators.http import require_http_methods
 from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningError
 from litefs.usecases.health_checker import HealthChecker
 from litefs.usecases.failover_coordinator import FailoverCoordinator
-from litefs.adapters.ports import PrimaryDetectorPort
+from litefs.adapters.ports import PrimaryDetectorPort, LeaderElectionPort
 from litefs_django.settings import get_litefs_settings
+from litefs_django.adapters import StaticLeaderElection
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -63,7 +64,7 @@ def get_failover_coordinator() -> FailoverCoordinator:
     """
     from django.conf import settings as django_settings
     from litefs.adapters.ports import EnvironmentNodeIDResolver
-    from litefs.usecases.leader_election import RaftLeaderElection
+    from litefs.factories import create_raft_leader_election
     from litefs.usecases.primary_initializer import PrimaryInitializer
 
     litefs_config = getattr(django_settings, "LITEFS", None)
@@ -71,6 +72,9 @@ def get_failover_coordinator() -> FailoverCoordinator:
         raise RuntimeError("LITEFS settings not configured")
 
     litefs_settings = get_litefs_settings(litefs_config)
+
+    # Type annotation for the election variable
+    election: LeaderElectionPort
 
     # Determine election mode and create appropriate leader election port
     if litefs_settings.leader_election == "static":
@@ -81,30 +85,13 @@ def get_failover_coordinator() -> FailoverCoordinator:
         current_node_id = resolver.resolve_node_id()
         initializer = PrimaryInitializer(litefs_settings.static_leader_config)
 
-        # Create a simple leader election port for static mode
-        class StaticLeaderElection:
-            """Static leader election implementation."""
-
-            def __init__(self, initializer: PrimaryInitializer, node_id: str) -> None:
-                self.initializer = initializer
-                self.node_id = node_id
-
-            def is_leader_elected(self) -> bool:
-                return self.initializer.is_primary(self.node_id)
-
-            def elect_as_leader(self) -> None:
-                pass
-
-            def demote_from_leader(self) -> None:
-                pass
-
+        # Use the extracted StaticLeaderElection adapter
         election = StaticLeaderElection(initializer, current_node_id)
     else:
-        # Raft mode
-        election = RaftLeaderElection(
-            mount_path=litefs_settings.mount_path,
-            raft_addr=litefs_settings.raft_self_addr or "",
-        )
+        # Raft mode - use factory
+        resolver = EnvironmentNodeIDResolver()
+        node_id = resolver.resolve_node_id()
+        election = create_raft_leader_election(litefs_settings, node_id)
 
     return FailoverCoordinator(election)
 
