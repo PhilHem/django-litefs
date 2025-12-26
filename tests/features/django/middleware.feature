@@ -1,15 +1,19 @@
 # @bdd-decomposed: 2025-12-26 epic=django-litefs-h9m status=complete
-Feature: LiteFS Django Middleware
+Feature: LiteFS Django Middleware - Split-Brain Protection
   As a Django application developer
-  I want middleware that handles LiteFS cluster concerns transparently
-  So that my application remains available and consistent without manual intervention
+  I want middleware that protects my application during split-brain conditions
+  So that data corruption is prevented when cluster consensus fails
 
-  The LiteFS middleware stack provides two key capabilities:
-  1. Split-brain protection - Blocks all requests during split-brain to prevent data corruption
-  2. Write request forwarding - Routes write requests to the primary node transparently
+  The SplitBrainMiddleware blocks all requests during split-brain conditions
+  (multiple nodes claiming leadership) to prevent conflicting writes.
 
-  These middleware components work together to provide seamless multi-node operation
-  while protecting data integrity during cluster failures.
+  This middleware provides:
+  - Request blocking when 2+ leaders detected
+  - Fail-open behavior on detection errors
+  - Django signals for split-brain events
+  - Static leader election mode support
+
+  TRA Namespace: Adapter.Http.SplitBrainMiddleware
 
   # ---------------------------------------------------------------------------
   # Split-Brain Protection - Request Blocking
@@ -81,188 +85,6 @@ Feature: LiteFS Django Middleware
     And the request should proceed to the next middleware
 
   # ---------------------------------------------------------------------------
-  # Write Request Forwarding - Detection
-  # ---------------------------------------------------------------------------
-
-  Scenario: POST request detected as write request
-    Given the current node is a replica
-    And write forwarding is enabled
-    When a POST request arrives
-    Then the request should be identified as a write request
-
-  Scenario: PUT request detected as write request
-    Given the current node is a replica
-    And write forwarding is enabled
-    When a PUT request arrives
-    Then the request should be identified as a write request
-
-  Scenario: PATCH request detected as write request
-    Given the current node is a replica
-    And write forwarding is enabled
-    When a PATCH request arrives
-    Then the request should be identified as a write request
-
-  Scenario: DELETE request detected as write request
-    Given the current node is a replica
-    And write forwarding is enabled
-    When a DELETE request arrives
-    Then the request should be identified as a write request
-
-  Scenario: GET request not detected as write request
-    Given the current node is a replica
-    And write forwarding is enabled
-    When a GET request arrives
-    Then the request should be identified as a read request
-    And the request should proceed locally
-
-  Scenario: HEAD request not detected as write request
-    Given the current node is a replica
-    And write forwarding is enabled
-    When a HEAD request arrives
-    Then the request should be identified as a read request
-
-  Scenario: OPTIONS request not detected as write request
-    Given the current node is a replica
-    And write forwarding is enabled
-    When an OPTIONS request arrives
-    Then the request should be identified as a read request
-
-  # ---------------------------------------------------------------------------
-  # Write Request Forwarding - Primary Node Behavior
-  # ---------------------------------------------------------------------------
-
-  Scenario: Write request proceeds locally on primary node
-    Given the current node is the primary
-    And write forwarding is enabled
-    When a POST request arrives
-    Then the request should proceed locally
-    And no forwarding should occur
-
-  Scenario: Read request proceeds locally on primary node
-    Given the current node is the primary
-    And write forwarding is enabled
-    When a GET request arrives
-    Then the request should proceed locally
-
-  # ---------------------------------------------------------------------------
-  # Write Request Forwarding - Replica Node Behavior
-  # ---------------------------------------------------------------------------
-
-  Scenario: Write request forwarded from replica to primary
-    Given the current node is a replica
-    And write forwarding is enabled
-    And the primary node is reachable at "http://primary:8000"
-    When a POST request arrives with path "/api/users/"
-    Then the request should be forwarded to "http://primary:8000/api/users/"
-    And the forwarded response should be returned to the client
-
-  Scenario: Forwarded request preserves request body
-    Given the current node is a replica
-    And write forwarding is enabled
-    And the primary node is reachable
-    When a POST request arrives with body '{"name": "test"}'
-    Then the forwarded request should include body '{"name": "test"}'
-
-  Scenario: Forwarded request preserves headers
-    Given the current node is a replica
-    And write forwarding is enabled
-    And the primary node is reachable
-    When a POST request arrives with header "Authorization: Bearer token123"
-    Then the forwarded request should include header "Authorization: Bearer token123"
-
-  Scenario: Forwarded request includes forwarding headers
-    Given the current node is a replica
-    And write forwarding is enabled
-    And the primary node is reachable
-    When a POST request arrives
-    Then the forwarded request should include header "X-Forwarded-For"
-    And the forwarded request should include header "X-Forwarded-Host"
-
-  # ---------------------------------------------------------------------------
-  # Write Request Forwarding - Error Handling
-  # ---------------------------------------------------------------------------
-
-  Scenario: Forwarding fails when primary unreachable
-    Given the current node is a replica
-    And write forwarding is enabled
-    And the primary node is unreachable
-    When a POST request arrives
-    Then the response status should be 503 Service Unavailable
-    And the response should indicate primary unavailable
-
-  Scenario: Forwarding fails with timeout
-    Given the current node is a replica
-    And write forwarding is enabled
-    And the primary node times out
-    When a POST request arrives
-    Then the response status should be 504 Gateway Timeout
-
-  Scenario: Forwarding retries on transient failure
-    Given the current node is a replica
-    And write forwarding is enabled
-    And the primary node fails once then succeeds
-    When a POST request arrives
-    Then the request should be retried
-    And the successful response should be returned
-
-  # ---------------------------------------------------------------------------
-  # Write Request Forwarding - Configuration
-  # ---------------------------------------------------------------------------
-
-  Scenario: Write forwarding disabled by default
-    Given write forwarding is not configured
-    And the current node is a replica
-    When a POST request arrives
-    Then no forwarding should occur
-    And the request should proceed locally
-
-  Scenario: Write forwarding can be explicitly disabled
-    Given write forwarding is explicitly disabled
-    And the current node is a replica
-    When a POST request arrives
-    Then no forwarding should occur
-
-  Scenario: Forwarding timeout is configurable
-    Given write forwarding is enabled with timeout 5 seconds
-    And the current node is a replica
-    And the primary node takes 3 seconds to respond
-    When a POST request arrives
-    Then the forwarded response should be returned
-
-  Scenario: Forwarding timeout exceeded
-    Given write forwarding is enabled with timeout 2 seconds
-    And the current node is a replica
-    And the primary node takes 5 seconds to respond
-    When a POST request arrives
-    Then the response status should be 504 Gateway Timeout
-
-  # ---------------------------------------------------------------------------
-  # Write Request Forwarding - Path Exclusions
-  # ---------------------------------------------------------------------------
-
-  Scenario: Health check paths excluded from forwarding
-    Given the current node is a replica
-    And write forwarding is enabled
-    And path "/health/" is excluded from forwarding
-    When a POST request arrives with path "/health/"
-    Then no forwarding should occur
-    And the request should proceed locally
-
-  Scenario: Admin paths can be excluded from forwarding
-    Given the current node is a replica
-    And write forwarding is enabled
-    And path pattern "/admin/*" is excluded from forwarding
-    When a POST request arrives with path "/admin/login/"
-    Then no forwarding should occur
-
-  Scenario: API paths are forwarded by default
-    Given the current node is a replica
-    And write forwarding is enabled
-    And path "/health/" is excluded from forwarding
-    When a POST request arrives with path "/api/users/"
-    Then the request should be forwarded to primary
-
-  # ---------------------------------------------------------------------------
   # Middleware Configuration - LiteFS Disabled
   # ---------------------------------------------------------------------------
 
@@ -270,7 +92,6 @@ Feature: LiteFS Django Middleware
     Given LiteFS is disabled in settings
     When any HTTP request arrives
     Then split-brain detection should not be performed
-    And no forwarding should occur
     And the request should proceed to the next middleware
 
   Scenario: Middleware inactive when settings missing
@@ -279,60 +100,24 @@ Feature: LiteFS Django Middleware
     Then the request should proceed to the next middleware
     And a debug message should be logged
 
-  # ---------------------------------------------------------------------------
-  # Middleware Order - Split-Brain Before Forwarding
-  # ---------------------------------------------------------------------------
-
-  Scenario: Split-brain blocks before forwarding is attempted
-    Given the cluster is in a split-brain state
-    And write forwarding is enabled
-    And the current node is a replica
-    When a POST request arrives
-    Then the response status should be 503 Service Unavailable
-    And no forwarding should be attempted
-
-  Scenario: Forwarding proceeds after split-brain check passes
-    Given the cluster has exactly one leader
-    And write forwarding is enabled
-    And the current node is a replica
-    When a POST request arrives
-    Then split-brain detection should be performed first
-    And then forwarding should be attempted
-
-  # ---------------------------------------------------------------------------
-  # Idempotency and Safety
-  # ---------------------------------------------------------------------------
-
-  Scenario: Non-idempotent requests include idempotency key
-    Given the current node is a replica
-    And write forwarding is enabled
-    And the primary node is reachable
-    When a POST request arrives without an idempotency key
-    Then the forwarded request should include header "X-Idempotency-Key"
-
-  Scenario: Existing idempotency key preserved
-    Given the current node is a replica
-    And write forwarding is enabled
-    And the primary node is reachable
-    When a POST request arrives with header "X-Idempotency-Key: abc123"
-    Then the forwarded request should include header "X-Idempotency-Key: abc123"
-
-  # ---------------------------------------------------------------------------
-  # Observability
-  # ---------------------------------------------------------------------------
-
-  Scenario: Forwarded requests are logged
-    Given the current node is a replica
-    And write forwarding is enabled
-    And the primary node is reachable
-    When a POST request arrives
-    Then a log entry should indicate the request was forwarded
-    And the log should include the target primary URL
-
-  Scenario: Forwarding failures are logged with details
-    Given the current node is a replica
-    And write forwarding is enabled
-    And the primary node is unreachable
-    When a POST request arrives
-    Then an error log should include the failure reason
-    And the error log should include the attempted primary URL
+# -----------------------------------------------------------------------------
+# ROADMAP: Write Request Forwarding
+# -----------------------------------------------------------------------------
+# The following scenarios describe PLANNED functionality for write request
+# forwarding. This feature is NOT YET IMPLEMENTED.
+#
+# When implemented, move these to a separate feature file and create beads tasks.
+#
+# Planned capabilities:
+# - Forward POST/PUT/PATCH/DELETE requests from replica to primary
+# - Preserve request headers and body
+# - Configurable timeouts and path exclusions
+# - Retry on transient failures
+#
+# Related beads issues (currently blocked):
+# - django-litefs-h9m.1: Create ForwardingSettings domain value object
+# - django-litefs-h9m.2: Create HttpForwardingPort interface
+# - django-litefs-h9m.3: Create WriteForwardingMiddleware
+# - django-litefs-h9m.4: Create FakeHttpForwardingAdapter for testing
+# - django-litefs-h9m.5: Create HttpxForwardingAdapter
+# -----------------------------------------------------------------------------

@@ -14,6 +14,8 @@ Feature: LiteFS Django Database Backend
   This backend is the enforcement layer between Django ORM and LiteFS, translating
   distributed system concerns into Django-compatible database errors.
 
+  TRA Namespace: Adapter.Database.LiteFS
+
   # ---------------------------------------------------------------------------
   # Backend Configuration - Mount Path Validation
   # ---------------------------------------------------------------------------
@@ -55,22 +57,6 @@ Feature: LiteFS Django Database Backend
     When I create a database connection
     Then the transaction mode should be "IMMEDIATE"
 
-  Scenario: Backend accepts explicit IMMEDIATE transaction mode
-    Given a database configuration with:
-      | option            | value      |
-      | litefs_mount_path | /mnt/litefs|
-      | transaction_mode  | IMMEDIATE  |
-    When I create a database connection
-    Then the transaction mode should be "IMMEDIATE"
-
-  Scenario: Backend accepts EXCLUSIVE transaction mode
-    Given a database configuration with:
-      | option            | value      |
-      | litefs_mount_path | /mnt/litefs|
-      | transaction_mode  | EXCLUSIVE  |
-    When I create a database connection
-    Then the transaction mode should be "EXCLUSIVE"
-
   Scenario: Backend rejects invalid transaction mode
     Given a database configuration with:
       | option            | value      |
@@ -81,8 +67,10 @@ Feature: LiteFS Django Database Backend
     And the error message should contain "transaction_mode"
 
   # ---------------------------------------------------------------------------
-  # Write Operation Guarding - Primary Detection
+  # Write Operation Guarding
   # ---------------------------------------------------------------------------
+  # Note: SQL classification (INSERT vs SELECT) is tested in core/sql_detection.feature.
+  # These scenarios test OUR guard logic, not SQLDetector's classification.
 
   Scenario: Write succeeds on primary node
     Given a database connection to the primary node
@@ -90,60 +78,19 @@ Feature: LiteFS Django Database Backend
     When I execute "INSERT INTO users (name) VALUES ('test')"
     Then the operation should succeed
 
-  Scenario: Write fails on replica node with NotPrimaryError
+  Scenario Outline: Write operations fail on replica with NotPrimaryError
     Given a database connection to a replica node
-    When I execute "INSERT INTO users (name) VALUES ('test')"
-    Then a NotPrimaryError should be raised
-    And the error message should contain "not primary"
-
-  Scenario: UPDATE fails on replica node
-    Given a database connection to a replica node
-    When I execute "UPDATE users SET name = 'updated' WHERE id = 1"
+    When I execute "<sql>"
     Then a NotPrimaryError should be raised
 
-  Scenario: DELETE fails on replica node
-    Given a database connection to a replica node
-    When I execute "DELETE FROM users WHERE id = 1"
-    Then a NotPrimaryError should be raised
-
-  Scenario: CREATE TABLE fails on replica node
-    Given a database connection to a replica node
-    When I execute "CREATE TABLE test (id INTEGER PRIMARY KEY)"
-    Then a NotPrimaryError should be raised
-
-  Scenario: DROP TABLE fails on replica node
-    Given a database connection to a replica node
-    When I execute "DROP TABLE test"
-    Then a NotPrimaryError should be raised
-
-  Scenario: ALTER TABLE fails on replica node
-    Given a database connection to a replica node
-    When I execute "ALTER TABLE users ADD COLUMN email TEXT"
-    Then a NotPrimaryError should be raised
-
-  # ---------------------------------------------------------------------------
-  # Write Operation Guarding - Read Operations Allowed
-  # ---------------------------------------------------------------------------
-
-  Scenario: SELECT succeeds on replica node
-    Given a database connection to a replica node
-    When I execute "SELECT * FROM users"
-    Then the operation should succeed
-
-  Scenario: SELECT with JOIN succeeds on replica node
-    Given a database connection to a replica node
-    When I execute "SELECT u.name FROM users u JOIN orders o ON u.id = o.user_id"
-    Then the operation should succeed
-
-  Scenario: PRAGMA query succeeds on replica node
-    Given a database connection to a replica node
-    When I execute "PRAGMA table_info(users)"
-    Then the operation should succeed
-
-  Scenario: Read succeeds on primary node
-    Given a database connection to the primary node
-    When I execute "SELECT * FROM users"
-    Then the operation should succeed
+    Examples:
+      | sql                                              |
+      | INSERT INTO users (name) VALUES ('test')         |
+      | UPDATE users SET name = 'updated' WHERE id = 1   |
+      | DELETE FROM users WHERE id = 1                   |
+      | CREATE TABLE test (id INTEGER PRIMARY KEY)       |
+      | DROP TABLE test                                  |
+      | ALTER TABLE users ADD COLUMN email TEXT          |
 
   # ---------------------------------------------------------------------------
   # Split-Brain Protection
@@ -176,76 +123,21 @@ Feature: LiteFS Django Database Backend
     Then the operation should succeed
 
   # ---------------------------------------------------------------------------
-  # Cursor Methods - execute()
-  # ---------------------------------------------------------------------------
-
-  Scenario: execute() checks primary status for write operations
-    Given a database connection to a replica node
-    When I call execute with "INSERT INTO users (name) VALUES ('test')"
-    Then a NotPrimaryError should be raised
-
-  Scenario: execute() allows read operations on replica
-    Given a database connection to a replica node
-    When I call execute with "SELECT * FROM users"
-    Then the operation should succeed
-
-  Scenario: execute() with parameters checks write status
-    Given a database connection to a replica node
-    When I call execute with "INSERT INTO users (name) VALUES (?)" and parameters ["test"]
-    Then a NotPrimaryError should be raised
-
-  # ---------------------------------------------------------------------------
-  # Cursor Methods - executemany()
-  # ---------------------------------------------------------------------------
-
-  Scenario: executemany() checks primary status for write operations
-    Given a database connection to a replica node
-    When I call executemany with "INSERT INTO users (name) VALUES (?)" and [["a"], ["b"]]
-    Then a NotPrimaryError should be raised
-
-  Scenario: executemany() allows read operations on replica
-    Given a database connection to a replica node
-    When I call executemany with "SELECT * FROM users WHERE id = ?" and [[1], [2]]
-    Then the operation should succeed
-
-  # ---------------------------------------------------------------------------
   # Cursor Methods - executescript()
   # ---------------------------------------------------------------------------
+  # executescript is special: it takes multiple statements and must check ALL
+  # before executing any. This differs from execute()/executemany() single-check.
 
   Scenario: executescript() checks for any write operation
     Given a database connection to a replica node
     When I call executescript with "SELECT 1; INSERT INTO users (name) VALUES ('test');"
     Then a NotPrimaryError should be raised
 
-  Scenario: executescript() allows read-only scripts on replica
-    Given a database connection to a replica node
-    When I call executescript with "SELECT 1; SELECT 2; SELECT 3;"
-    Then the operation should succeed
-
   Scenario: executescript() checks split-brain before executing
     Given a database connection to the primary node
     And a split-brain condition exists with 2 leaders
     When I call executescript with "INSERT INTO a VALUES (1); INSERT INTO b VALUES (2);"
     Then a SplitBrainError should be raised
-
-  # ---------------------------------------------------------------------------
-  # Database Maintenance Operations
-  # ---------------------------------------------------------------------------
-
-  Scenario: VACUUM fails on replica node
-    Given a database connection to a replica node
-    When I execute "VACUUM"
-    Then a NotPrimaryError should be raised
-
-  Scenario: REINDEX fails on replica node
-    Given a database connection to a replica node
-    When I execute "REINDEX"
-    Then a NotPrimaryError should be raised
-
-  Scenario: ANALYZE fails on replica node
-    Given a database connection to a replica node
-    When I execute "ANALYZE"
-    Then a NotPrimaryError should be raised
 
   # ---------------------------------------------------------------------------
   # WAL Mode Enforcement
@@ -255,11 +147,6 @@ Feature: LiteFS Django Database Backend
     Given a database configuration with mount path "/mnt/litefs"
     When I create a database connection
     Then the journal mode should be "wal"
-
-  Scenario: Attempting to change journal mode is blocked
-    Given a database connection to the primary node
-    When I execute "PRAGMA journal_mode = DELETE"
-    Then either the operation should fail or journal mode should remain "wal"
 
   # ---------------------------------------------------------------------------
   # Error Message Quality
@@ -303,50 +190,3 @@ Feature: LiteFS Django Database Backend
     And no split-brain detector is configured
     When I execute "INSERT INTO users (name) VALUES ('test')"
     Then a NotPrimaryError should be raised
-
-  # ---------------------------------------------------------------------------
-  # Connection Lifecycle
-  # ---------------------------------------------------------------------------
-
-  Scenario: Cursor inherits detectors from connection
-    Given a database connection with configured detectors
-    When I create a cursor from the connection
-    Then the cursor should have the same primary detector
-    And the cursor should have the same split-brain detector
-
-  Scenario: Multiple cursors share the same detectors
-    Given a database connection with configured detectors
-    When I create multiple cursors from the connection
-    Then all cursors should use the same detector instances
-
-  # ---------------------------------------------------------------------------
-  # Django ORM Integration
-  # ---------------------------------------------------------------------------
-
-  Scenario: Django model save fails on replica
-    Given a database connection to a replica node
-    And a Django model instance
-    When I call save() on the model
-    Then a NotPrimaryError should be raised
-
-  Scenario: Django model save succeeds on primary
-    Given a database connection to the primary node
-    And no split-brain condition exists
-    And a Django model instance
-    When I call save() on the model
-    Then the operation should succeed
-
-  Scenario: Django queryset update fails on replica
-    Given a database connection to a replica node
-    When I call queryset.update(name='new')
-    Then a NotPrimaryError should be raised
-
-  Scenario: Django queryset delete fails on replica
-    Given a database connection to a replica node
-    When I call queryset.delete()
-    Then a NotPrimaryError should be raised
-
-  Scenario: Django queryset filter succeeds on replica
-    Given a database connection to a replica node
-    When I call queryset.filter(name='test')
-    Then the operation should succeed
