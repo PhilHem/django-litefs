@@ -35,9 +35,10 @@ markers = [
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
- "hypothesis>=6.0.0",
- "mypy>=1.11.0",
- "pytest-bdd>=8.1.0",
+    "hypothesis>=6.0.0",
+    "mypy>=1.11.0",
+    "pytest-bdd>=8.1.0",
+    "ruff>=0.8.0",
 ]
 
 [tool.uv.sources]

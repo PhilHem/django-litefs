@@ -40,10 +40,10 @@ jobs:
       - name: Lint with ruff (Python 3.12 only)
         if: matrix.python-version == '3.12'
         run: |
-          cd packages/litefs && uv sync --no-dev && uv run ruff check src/
-          cd ../litefs-django && uv sync --no-dev && uv run ruff check src/
-          cd ../litefs-fastapi && uv sync --no-dev && uv run ruff check src/
-          cd ../py-leader && uv sync --no-dev && uv run ruff check src/
+          cd packages/litefs && uv sync && uv run ruff check src/
+          cd ../litefs-django && uv sync && uv run ruff check src/
+          cd ../litefs-fastapi && uv sync && uv run ruff check src/
+          cd ../py-leader && uv sync && uv run ruff check src/
 
       # Type checking (Python 3.12 only for speed)
       - name: Type check with mypy (Python 3.12 only)

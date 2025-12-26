@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from typing import Optional, Callable, Any
+from typing import Callable, Any
 
 from django.apps import AppConfig
 from django.conf import settings as django_settings
