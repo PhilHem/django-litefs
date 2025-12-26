@@ -10,6 +10,7 @@ from litefs.adapters.ports import (
     LeaderElectionPort,
     RaftLeaderElectionPort,
     SplitBrainDetectorPort,
+    LoggingPort,
 )
 from litefs.domain.split_brain import RaftClusterState, RaftNodeState
 
@@ -692,3 +693,24 @@ class TestSplitBrainDetectorPort:
         assert state.has_single_leader() is False
         assert len(state.get_leader_nodes()) == 0
         assert len(state.get_replica_nodes()) == 3
+
+
+@pytest.mark.tier(1)
+@pytest.mark.tra("Port.LoggingPort")
+class TestLoggingPort:
+    """Test LoggingPort protocol interface."""
+
+    def test_protocol_has_warning_method(self) -> None:
+        """Test that LoggingPort has warning method."""
+        assert hasattr(LoggingPort, "warning")
+
+    def test_protocol_is_runtime_checkable(self) -> None:
+        """Test that LoggingPort is runtime_checkable."""
+
+        class FakeLogger:
+            def warning(self, message: str) -> None:
+                pass
+
+        fake = FakeLogger()
+        # If runtime_checkable works, isinstance should return True
+        assert isinstance(fake, LoggingPort)

@@ -236,6 +236,30 @@ class EventEmitterPort(Protocol):
         ...
 
 
+@runtime_checkable
+class LoggingPort(Protocol):
+    """Port interface for structured logging.
+
+    Implementations handle log message delivery to configured logging backends.
+    Abstracts the logging mechanism from use cases that need to emit warnings
+    (e.g., when stale reads are detected, split-brain scenarios, etc.).
+
+    Contract:
+        - warning(message) logs a warning-level message
+        - warning() is fire-and-forget (no return value, no exceptions propagated)
+        - Implementations may format, filter, or route messages as needed
+        - Thread safety is implementation-defined
+    """
+
+    def warning(self, message: str) -> None:
+        """Log a warning message.
+
+        Args:
+            message: The warning message to log.
+        """
+        ...
+
+
 class EnvironmentNodeIDResolver:
     """Default implementation: resolve node ID from LITEFS_NODE_ID environment variable.
 
