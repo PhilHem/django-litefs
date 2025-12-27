@@ -23,3 +23,6 @@ __pycache__/
 # Hypothesis test cache
 .hypothesis/
 **/.hypothesis/
+
+# Beads session plans (local only)
+.beads/plans/
