@@ -10,6 +10,8 @@ from litefs.usecases.split_brain_detector import SplitBrainDetector, SplitBrainS
 from litefs.usecases.liveness_checker import LivenessChecker
 from litefs.usecases.readiness_checker import ReadinessChecker
 from litefs.usecases.primary_url_detector import PrimaryURLDetector
+from litefs.usecases.primary_url_resolver import PrimaryURLResolver
+from litefs.usecases.path_exclusion_matcher import PathExclusionMatcher
 
 __all__ = [
     "CachedPrimaryDetector",
@@ -23,6 +25,8 @@ __all__ = [
     "LivenessChecker",
     "ReadinessChecker",
     "PrimaryURLDetector",
+    "PrimaryURLResolver",
+    "PathExclusionMatcher",
 ]
 
 

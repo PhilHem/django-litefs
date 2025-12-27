@@ -93,13 +93,18 @@ class ForwardingSettings:
         primary_url: URL of the primary node for forwarding writes.
                     Required when enabled=True. Defaults to None.
         timeout_seconds: Timeout for forwarded requests in seconds.
-                        Defaults to 30.0.
+                        Defaults to 30.0. Deprecated: use connect_timeout
+                        and read_timeout instead.
         retry_count: Number of retry attempts for failed forwards.
                     Defaults to 1.
         excluded_paths: URL paths to exclude from forwarding (e.g., health checks).
                        Uses tuple for immutability. Defaults to empty tuple.
         scheme: HTTP scheme to use for forwarding (e.g., "http", "https").
                 Defaults to "http".
+        connect_timeout: Timeout for establishing HTTP connection in seconds.
+                        Must be positive. Defaults to 5.0.
+        read_timeout: Timeout for reading HTTP response in seconds.
+                     Must be positive. Defaults to 30.0.
     """
 
     enabled: bool = False
@@ -108,6 +113,19 @@ class ForwardingSettings:
     retry_count: int = 1
     excluded_paths: tuple[str, ...] = ()
     scheme: str = "http"
+    connect_timeout: float = 5.0
+    read_timeout: float = 30.0
+
+    def __post_init__(self) -> None:
+        """Validate forwarding settings."""
+        self._validate_timeouts()
+
+    def _validate_timeouts(self) -> None:
+        """Validate that timeout values are positive."""
+        if self.connect_timeout <= 0:
+            raise LiteFSConfigError("connect_timeout must be positive")
+        if self.read_timeout <= 0:
+            raise LiteFSConfigError("read_timeout must be positive")
 
 
 @dataclass(frozen=True)

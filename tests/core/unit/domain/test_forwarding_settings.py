@@ -131,3 +131,65 @@ class TestForwardingSettings:
         fwd1 = ForwardingSettings(scheme="http")
         fwd2 = ForwardingSettings(scheme="https")
         assert hash(fwd1) != hash(fwd2)
+
+    def test_connect_timeout_default(self) -> None:
+        """Test that connect_timeout defaults to 5.0 seconds."""
+        fwd = ForwardingSettings()
+        assert fwd.connect_timeout == 5.0
+
+    def test_read_timeout_default(self) -> None:
+        """Test that read_timeout defaults to 30.0 seconds."""
+        fwd = ForwardingSettings()
+        assert fwd.read_timeout == 30.0
+
+    def test_connect_timeout_custom(self) -> None:
+        """Test that connect_timeout can be customized."""
+        fwd = ForwardingSettings(connect_timeout=10.0)
+        assert fwd.connect_timeout == 10.0
+
+    def test_read_timeout_custom(self) -> None:
+        """Test that read_timeout can be customized."""
+        fwd = ForwardingSettings(read_timeout=60.0)
+        assert fwd.read_timeout == 60.0
+
+    def test_connect_timeout_validation_zero_raises(self) -> None:
+        """Test that connect_timeout=0 raises LiteFSConfigError."""
+        from litefs.domain.exceptions import LiteFSConfigError
+
+        with pytest.raises(LiteFSConfigError, match="connect_timeout must be positive"):
+            ForwardingSettings(connect_timeout=0.0)
+
+    def test_read_timeout_validation_zero_raises(self) -> None:
+        """Test that read_timeout=0 raises LiteFSConfigError."""
+        from litefs.domain.exceptions import LiteFSConfigError
+
+        with pytest.raises(LiteFSConfigError, match="read_timeout must be positive"):
+            ForwardingSettings(read_timeout=0.0)
+
+    def test_connect_timeout_validation_negative_raises(self) -> None:
+        """Test that negative connect_timeout raises LiteFSConfigError."""
+        from litefs.domain.exceptions import LiteFSConfigError
+
+        with pytest.raises(LiteFSConfigError, match="connect_timeout must be positive"):
+            ForwardingSettings(connect_timeout=-1.0)
+
+    def test_read_timeout_validation_negative_raises(self) -> None:
+        """Test that negative read_timeout raises LiteFSConfigError."""
+        from litefs.domain.exceptions import LiteFSConfigError
+
+        with pytest.raises(LiteFSConfigError, match="read_timeout must be positive"):
+            ForwardingSettings(read_timeout=-5.0)
+
+    def test_timeouts_included_in_equality(self) -> None:
+        """Test that timeout fields are included in equality comparison."""
+        fwd1 = ForwardingSettings(connect_timeout=5.0, read_timeout=30.0)
+        fwd2 = ForwardingSettings(connect_timeout=10.0, read_timeout=30.0)
+        fwd3 = ForwardingSettings(connect_timeout=5.0, read_timeout=60.0)
+        assert fwd1 != fwd2
+        assert fwd1 != fwd3
+
+    def test_timeouts_included_in_hash(self) -> None:
+        """Test that timeout fields are included in hash calculation."""
+        fwd1 = ForwardingSettings(connect_timeout=5.0, read_timeout=30.0)
+        fwd2 = ForwardingSettings(connect_timeout=10.0, read_timeout=30.0)
+        assert hash(fwd1) != hash(fwd2)
