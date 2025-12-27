@@ -61,9 +61,10 @@ class LiteFSCursor(SQLite3Cursor):
             try:
                 split_brain_status = self._split_brain_detector.detect_split_brain()
                 if split_brain_status.is_split_brain:
+                    leader_count = len(split_brain_status.leader_nodes)
                     raise SplitBrainError(
                         f"Write operation attempted during split-brain condition. "
-                        f"Multiple nodes claim leadership: {split_brain_status.leader_nodes}. "
+                        f"Detected {leader_count} leaders: {split_brain_status.leader_nodes}. "
                         f"Writes are not allowed during split-brain to prevent data inconsistency."
                     )
             except SplitBrainError:
@@ -87,6 +88,7 @@ class LiteFSCursor(SQLite3Cursor):
             try:
                 if not self._primary_detector.is_primary():
                     raise NotPrimaryError(
+                        "This node is not primary (replica). "
                         "Write operation attempted on replica node. "
                         "Only the primary node can perform writes."
                     )
@@ -159,9 +161,10 @@ class LiteFSCursor(SQLite3Cursor):
             try:
                 split_brain_status = self._split_brain_detector.detect_split_brain()
                 if split_brain_status.is_split_brain:
+                    leader_count = len(split_brain_status.leader_nodes)
                     raise SplitBrainError(
                         f"Script execution attempted during split-brain condition. "
-                        f"Multiple nodes claim leadership: {split_brain_status.leader_nodes}. "
+                        f"Detected {leader_count} leaders: {split_brain_status.leader_nodes}. "
                         f"Scripts may contain writes and are not allowed during split-brain."
                     )
             except SplitBrainError:
@@ -172,6 +175,7 @@ class LiteFSCursor(SQLite3Cursor):
         # Then check primary status
         if not self._primary_detector.is_primary():
             raise NotPrimaryError(
+                "This node is not primary (replica). "
                 "Script execution attempted on replica node. "
                 "Only the primary node can execute scripts that may contain writes."
             )

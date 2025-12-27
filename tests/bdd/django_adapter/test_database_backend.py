@@ -208,6 +208,33 @@ def test_backend_enforces_wal_journal_mode():
 
 
 # ---------------------------------------------------------------------------
+# Scenarios - Error Message Quality (lines 155-170)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Django.Backend.ErrorMessages")
+@scenario(
+    "../../features/django/database_backend.feature",
+    "NotPrimaryError includes helpful context",
+)
+def test_not_primary_error_includes_helpful_context():
+    """Test that NotPrimaryError message includes helpful context."""
+    pass
+
+
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Django.Backend.ErrorMessages")
+@scenario(
+    "../../features/django/database_backend.feature",
+    "SplitBrainError includes leader count",
+)
+def test_split_brain_error_includes_leader_count():
+    """Test that SplitBrainError message includes leader count."""
+    pass
+
+
+# ---------------------------------------------------------------------------
 # Scenarios - Optional Split-Brain Detection (lines 176-192)
 # ---------------------------------------------------------------------------
 
@@ -672,6 +699,53 @@ def operation_succeeds(context: dict):
     assert context["result"] == "success", (
         f"Expected success but got {context['error_type']}: {context.get('error')}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Then steps - Error Message Quality (lines 155-170)
+# ---------------------------------------------------------------------------
+
+
+@then("the NotPrimaryError message should include:")
+def not_primary_error_message_includes(context: dict, datatable):
+    """Assert that NotPrimaryError message includes all expected content.
+
+    Args:
+        context: BDD context dict
+        datatable: Table with 'content' column listing expected substrings
+    """
+    assert context["error_type"] == "NotPrimaryError", (
+        f"Expected NotPrimaryError but got {context['error_type']}: {context.get('error')}"
+    )
+    error_message = str(context["error"]).lower()
+
+    # Skip header row and check each content item
+    for row in datatable[1:]:
+        expected_content = row[0].lower()
+        assert expected_content in error_message, (
+            f"Expected '{expected_content}' in NotPrimaryError message: {context['error']}"
+        )
+
+
+@then("the SplitBrainError message should include:")
+def split_brain_error_message_includes(context: dict, datatable):
+    """Assert that SplitBrainError message includes all expected content.
+
+    Args:
+        context: BDD context dict
+        datatable: Table with 'content' column listing expected substrings
+    """
+    assert context["error_type"] == "SplitBrainError", (
+        f"Expected SplitBrainError but got {context['error_type']}: {context.get('error')}"
+    )
+    error_message = str(context["error"]).lower()
+
+    # Skip header row and check each content item
+    for row in datatable[1:]:
+        expected_content = row[0].lower()
+        assert expected_content in error_message, (
+            f"Expected '{expected_content}' in SplitBrainError message: {context['error']}"
+        )
 
 
 # ---------------------------------------------------------------------------
