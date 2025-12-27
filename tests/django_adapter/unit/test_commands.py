@@ -966,3 +966,163 @@ class TestJSONOutput:
             assert data["enabled"] is False
             # Role should be null/none when disabled
             assert data.get("role") is None or "role" not in data
+
+
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Django")
+class TestLiteFSStatusHealthStatus:
+    """Test health status display in litefs_status command."""
+
+    def test_status_shows_health_status_healthy(self) -> None:
+        """Test that status command shows health status when node is healthy."""
+        from litefs.domain.health import HealthStatus
+
+        out = StringIO()
+        cmd = LiteFSStatusCommand(stdout=out)
+
+        mock_settings = Mock(spec=LiteFSSettings)
+        mock_settings.mount_path = "/litefs"
+        mock_settings.enabled = True
+        mock_settings.leader_election = "static"
+
+        with patch("litefs_django.management.commands.litefs_status.get_litefs_settings") as mock_get_settings:
+            with patch("litefs_django.management.commands.litefs_status.PrimaryDetector") as mock_detector_class:
+                with patch("litefs_django.management.commands.litefs_status.HealthChecker") as mock_health_checker_class:
+                    mock_get_settings.return_value = mock_settings
+                    detector = Mock()
+                    detector.is_primary.return_value = True
+                    mock_detector_class.return_value = detector
+
+                    health_checker = Mock()
+                    health_checker.check_health.return_value = HealthStatus(state="healthy")
+                    mock_health_checker_class.return_value = health_checker
+
+                    cmd.handle()
+                    output = out.getvalue()
+
+                    assert "healthy" in output.lower()
+
+    def test_status_shows_health_status_degraded(self) -> None:
+        """Test that status command shows degraded health status."""
+        from litefs.domain.health import HealthStatus
+
+        out = StringIO()
+        cmd = LiteFSStatusCommand(stdout=out)
+
+        mock_settings = Mock(spec=LiteFSSettings)
+        mock_settings.mount_path = "/litefs"
+        mock_settings.enabled = True
+        mock_settings.leader_election = "static"
+
+        with patch("litefs_django.management.commands.litefs_status.get_litefs_settings") as mock_get_settings:
+            with patch("litefs_django.management.commands.litefs_status.PrimaryDetector") as mock_detector_class:
+                with patch("litefs_django.management.commands.litefs_status.HealthChecker") as mock_health_checker_class:
+                    mock_get_settings.return_value = mock_settings
+                    detector = Mock()
+                    detector.is_primary.return_value = True
+                    mock_detector_class.return_value = detector
+
+                    health_checker = Mock()
+                    health_checker.check_health.return_value = HealthStatus(state="degraded")
+                    mock_health_checker_class.return_value = health_checker
+
+                    cmd.handle()
+                    output = out.getvalue()
+
+                    assert "degraded" in output.lower()
+
+    def test_status_shows_health_status_unhealthy(self) -> None:
+        """Test that status command shows unhealthy health status."""
+        from litefs.domain.health import HealthStatus
+
+        out = StringIO()
+        cmd = LiteFSStatusCommand(stdout=out)
+
+        mock_settings = Mock(spec=LiteFSSettings)
+        mock_settings.mount_path = "/litefs"
+        mock_settings.enabled = True
+        mock_settings.leader_election = "static"
+
+        with patch("litefs_django.management.commands.litefs_status.get_litefs_settings") as mock_get_settings:
+            with patch("litefs_django.management.commands.litefs_status.PrimaryDetector") as mock_detector_class:
+                with patch("litefs_django.management.commands.litefs_status.HealthChecker") as mock_health_checker_class:
+                    mock_get_settings.return_value = mock_settings
+                    detector = Mock()
+                    detector.is_primary.return_value = True
+                    mock_detector_class.return_value = detector
+
+                    health_checker = Mock()
+                    health_checker.check_health.return_value = HealthStatus(state="unhealthy")
+                    mock_health_checker_class.return_value = health_checker
+
+                    cmd.handle()
+                    output = out.getvalue()
+
+                    assert "unhealthy" in output.lower()
+
+    def test_status_json_includes_health_status(self) -> None:
+        """Test that JSON output includes health_status field."""
+        import json
+        from litefs.domain.health import HealthStatus
+
+        out = StringIO()
+        cmd = LiteFSStatusCommand(stdout=out)
+
+        mock_settings = Mock(spec=LiteFSSettings)
+        mock_settings.mount_path = "/litefs"
+        mock_settings.enabled = True
+        mock_settings.leader_election = "static"
+        mock_settings.data_path = "/var/lib/litefs"
+        mock_settings.database_name = "db"
+        mock_settings.proxy_addr = ":8080"
+        mock_settings.retention = "1h"
+
+        with patch("litefs_django.management.commands.litefs_status.get_litefs_settings") as mock_get_settings:
+            with patch("litefs_django.management.commands.litefs_status.PrimaryDetector") as mock_detector_class:
+                with patch("litefs_django.management.commands.litefs_status.HealthChecker") as mock_health_checker_class:
+                    mock_get_settings.return_value = mock_settings
+                    detector = Mock()
+                    detector.is_primary.return_value = True
+                    mock_detector_class.return_value = detector
+
+                    health_checker = Mock()
+                    health_checker.check_health.return_value = HealthStatus(state="healthy")
+                    mock_health_checker_class.return_value = health_checker
+
+                    cmd.handle(format="json")
+                    output = out.getvalue()
+
+                    data = json.loads(output)
+                    assert "health_status" in data
+                    assert data["health_status"] == "healthy"
+
+    def test_status_health_uses_health_checker(self) -> None:
+        """Test that health status is obtained from HealthChecker use case."""
+        from litefs.domain.health import HealthStatus
+
+        out = StringIO()
+        cmd = LiteFSStatusCommand(stdout=out)
+
+        mock_settings = Mock(spec=LiteFSSettings)
+        mock_settings.mount_path = "/litefs"
+        mock_settings.enabled = True
+        mock_settings.leader_election = "static"
+
+        with patch("litefs_django.management.commands.litefs_status.get_litefs_settings") as mock_get_settings:
+            with patch("litefs_django.management.commands.litefs_status.PrimaryDetector") as mock_detector_class:
+                with patch("litefs_django.management.commands.litefs_status.HealthChecker") as mock_health_checker_class:
+                    mock_get_settings.return_value = mock_settings
+                    detector = Mock()
+                    detector.is_primary.return_value = True
+                    mock_detector_class.return_value = detector
+
+                    health_checker = Mock()
+                    health_checker.check_health.return_value = HealthStatus(state="healthy")
+                    mock_health_checker_class.return_value = health_checker
+
+                    cmd.handle()
+
+                    # Verify HealthChecker was instantiated with the detector
+                    mock_health_checker_class.assert_called_once()
+                    # Verify check_health was called
+                    health_checker.check_health.assert_called_once()

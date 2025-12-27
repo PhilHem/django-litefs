@@ -6,6 +6,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.conf import settings
 
 from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningError
+from litefs.usecases.health_checker import HealthChecker
 from litefs_django.settings import get_litefs_settings
 from litefs.domain.exceptions import LiteFSConfigError
 
@@ -84,11 +85,15 @@ class Command(BaseCommand):
                 )
             return
 
-        # Determine node role
+        # Determine node role and health status
         try:
             detector = PrimaryDetector(litefs_settings.mount_path)
             is_primary = detector.is_primary()
             role = "primary" if is_primary else "replica"
+
+            # Get health status from HealthChecker
+            health_checker = HealthChecker(detector)
+            health_status = health_checker.check_health()
         except LiteFSNotRunningError as e:
             if output_format == "json":
                 self._output_json(
@@ -110,6 +115,7 @@ class Command(BaseCommand):
                 "mount_path": str(litefs_settings.mount_path),
                 "enabled": True,
                 "leader_election": litefs_settings.leader_election,
+                "health_status": health_status.state,
             }
             if verbosity >= 2:
                 data.update(
@@ -130,11 +136,13 @@ class Command(BaseCommand):
 
         # verbosity >= 1: normal output
         role_display = "Primary" if role == "primary" else "Replica"
+        health_display = health_status.state.capitalize()
         self.stdout.write(self.style.SUCCESS("LiteFS Status:"))
         self.stdout.write(f"  Node Role:     {role_display}")
         self.stdout.write(f"  Mount Path:    {litefs_settings.mount_path}")
         self.stdout.write("  Enabled:       True")
         self.stdout.write(f"  Leader Mode:   {litefs_settings.leader_election.upper()}")
+        self.stdout.write(f"  Health:        {health_display}")
 
         # verbosity >= 2: detailed output
         if verbosity >= 2:
