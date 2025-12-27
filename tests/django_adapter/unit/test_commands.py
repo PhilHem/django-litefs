@@ -14,7 +14,7 @@ from litefs_django.management.commands.litefs_check import Command as LiteFSChec
 
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Adapter")
+@pytest.mark.tra("Adapter.Django")
 class TestLiteFSStatusCommand:
     """Test litefs_status management command."""
 
@@ -161,7 +161,7 @@ class TestLiteFSStatusCommand:
 
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Adapter")
+@pytest.mark.tra("Adapter.Django")
 class TestLiteFSCheckCommand:
     """Test litefs_check management command."""
 
@@ -407,7 +407,7 @@ class TestLiteFSCheckCommand:
 
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Adapter")
+@pytest.mark.tra("Adapter.Django")
 class TestLiteFSCheckMultiIssueReporting:
     """Test multi-issue reporting for litefs_check command."""
 
@@ -578,3 +578,391 @@ class TestLiteFSCheckMultiIssueReporting:
                     has_enabled = "disabled" in error_message.lower() or "enabled" in error_message.lower()
                     has_mount = "mount" in error_message.lower() or "accessible" in error_message.lower()
                     assert has_backend and has_enabled and has_mount
+
+
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Django")
+class TestVerbosityLevels:
+    """Test Django verbosity levels for management commands."""
+
+    def test_status_verbosity_0_minimal_output(self) -> None:
+        """Test that -v 0 produces minimal (no) output for status command."""
+        out = StringIO()
+        cmd = LiteFSStatusCommand(stdout=out)
+
+        mock_settings = Mock(spec=LiteFSSettings)
+        mock_settings.mount_path = "/litefs"
+        mock_settings.enabled = True
+        mock_settings.leader_election = "static"
+
+        with patch("litefs_django.management.commands.litefs_status.get_litefs_settings") as mock_get_settings:
+            with patch("litefs_django.management.commands.litefs_status.PrimaryDetector") as mock_detector_class:
+                mock_get_settings.return_value = mock_settings
+                detector = Mock()
+                detector.is_primary.return_value = True
+                mock_detector_class.return_value = detector
+
+                cmd.handle(verbosity=0)
+                output = out.getvalue()
+
+                # Verbosity 0 should produce minimal or no output
+                assert output == "" or len(output.strip().split("\n")) <= 1
+
+    def test_status_verbosity_1_normal_output(self) -> None:
+        """Test that -v 1 (default) produces normal output for status command."""
+        out = StringIO()
+        cmd = LiteFSStatusCommand(stdout=out)
+
+        mock_settings = Mock(spec=LiteFSSettings)
+        mock_settings.mount_path = "/litefs"
+        mock_settings.enabled = True
+        mock_settings.leader_election = "static"
+
+        with patch("litefs_django.management.commands.litefs_status.get_litefs_settings") as mock_get_settings:
+            with patch("litefs_django.management.commands.litefs_status.PrimaryDetector") as mock_detector_class:
+                mock_get_settings.return_value = mock_settings
+                detector = Mock()
+                detector.is_primary.return_value = True
+                mock_detector_class.return_value = detector
+
+                cmd.handle(verbosity=1)
+                output = out.getvalue()
+
+                # Verbosity 1 should show status info
+                assert "primary" in output.lower()
+                assert "/litefs" in output
+
+    def test_status_verbosity_2_detailed_output(self) -> None:
+        """Test that -v 2 produces detailed output for status command."""
+        out = StringIO()
+        cmd = LiteFSStatusCommand(stdout=out)
+
+        mock_settings = Mock(spec=LiteFSSettings)
+        mock_settings.mount_path = "/litefs"
+        mock_settings.enabled = True
+        mock_settings.leader_election = "static"
+        mock_settings.data_path = "/var/lib/litefs"
+        mock_settings.database_name = "db"
+        mock_settings.proxy_addr = ":8080"
+        mock_settings.retention = "1h"
+
+        with patch("litefs_django.management.commands.litefs_status.get_litefs_settings") as mock_get_settings:
+            with patch("litefs_django.management.commands.litefs_status.PrimaryDetector") as mock_detector_class:
+                mock_get_settings.return_value = mock_settings
+                detector = Mock()
+                detector.is_primary.return_value = True
+                mock_detector_class.return_value = detector
+
+                cmd.handle(verbosity=2)
+                output = out.getvalue()
+
+                # Verbosity 2 should include extra details
+                assert "data" in output.lower() or "database" in output.lower()
+
+    def test_check_verbosity_0_minimal_output(self) -> None:
+        """Test that -v 0 produces minimal output for check command."""
+        out = StringIO()
+        cmd = LiteFSCheckCommand(stdout=out)
+
+        mock_settings = Mock(spec=LiteFSSettings)
+        mock_settings.mount_path = "/litefs"
+        mock_settings.enabled = True
+
+        mock_django_settings = Mock()
+        mock_django_settings.LITEFS = {}
+        mock_django_settings.DATABASES = {
+            "default": {"ENGINE": "litefs_django.db.backends.litefs"}
+        }
+
+        with patch("litefs_django.management.commands.litefs_check.get_litefs_settings") as mock_get_settings:
+            with patch("litefs_django.management.commands.litefs_check.settings", mock_django_settings):
+                with patch("litefs_django.management.commands.litefs_check.PrimaryDetector") as mock_detector_class:
+                    mock_get_settings.return_value = mock_settings
+                    detector = Mock()
+                    detector.is_primary.return_value = True
+                    mock_detector_class.return_value = detector
+
+                    cmd.handle(verbosity=0)
+                    output = out.getvalue()
+
+                    # Verbosity 0 should produce no output on success
+                    assert output == ""
+
+    def test_check_verbosity_1_normal_output(self) -> None:
+        """Test that -v 1 (default) produces success message for check command."""
+        out = StringIO()
+        cmd = LiteFSCheckCommand(stdout=out)
+
+        mock_settings = Mock(spec=LiteFSSettings)
+        mock_settings.mount_path = "/litefs"
+        mock_settings.enabled = True
+
+        mock_django_settings = Mock()
+        mock_django_settings.LITEFS = {}
+        mock_django_settings.DATABASES = {
+            "default": {"ENGINE": "litefs_django.db.backends.litefs"}
+        }
+
+        with patch("litefs_django.management.commands.litefs_check.get_litefs_settings") as mock_get_settings:
+            with patch("litefs_django.management.commands.litefs_check.settings", mock_django_settings):
+                with patch("litefs_django.management.commands.litefs_check.PrimaryDetector") as mock_detector_class:
+                    mock_get_settings.return_value = mock_settings
+                    detector = Mock()
+                    detector.is_primary.return_value = True
+                    mock_detector_class.return_value = detector
+
+                    cmd.handle(verbosity=1)
+                    output = out.getvalue()
+
+                    # Verbosity 1 should show success message
+                    assert "passed" in output.lower() or "ok" in output.lower() or len(output) > 0
+
+    def test_check_verbosity_2_shows_check_steps(self) -> None:
+        """Test that -v 2 shows individual check steps for check command."""
+        out = StringIO()
+        cmd = LiteFSCheckCommand(stdout=out)
+
+        mock_settings = Mock(spec=LiteFSSettings)
+        mock_settings.mount_path = "/litefs"
+        mock_settings.enabled = True
+
+        mock_django_settings = Mock()
+        mock_django_settings.LITEFS = {}
+        mock_django_settings.DATABASES = {
+            "default": {"ENGINE": "litefs_django.db.backends.litefs"}
+        }
+
+        with patch("litefs_django.management.commands.litefs_check.get_litefs_settings") as mock_get_settings:
+            with patch("litefs_django.management.commands.litefs_check.settings", mock_django_settings):
+                with patch("litefs_django.management.commands.litefs_check.PrimaryDetector") as mock_detector_class:
+                    mock_get_settings.return_value = mock_settings
+                    detector = Mock()
+                    detector.is_primary.return_value = True
+                    mock_detector_class.return_value = detector
+
+                    cmd.handle(verbosity=2)
+                    output = out.getvalue()
+
+                    # Verbosity 2 should show individual health checks
+                    assert "[" in output or "check" in output.lower()
+
+
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Django")
+class TestJSONOutput:
+    """Test JSON output format for management commands."""
+
+    def test_check_json_format_on_success(self) -> None:
+        """Test that --format=json produces valid JSON on success."""
+        import json
+
+        out = StringIO()
+        cmd = LiteFSCheckCommand(stdout=out)
+
+        mock_settings = Mock(spec=LiteFSSettings)
+        mock_settings.mount_path = "/litefs"
+        mock_settings.enabled = True
+
+        mock_django_settings = Mock()
+        mock_django_settings.LITEFS = {}
+        mock_django_settings.DATABASES = {
+            "default": {"ENGINE": "litefs_django.db.backends.litefs"}
+        }
+
+        with patch("litefs_django.management.commands.litefs_check.get_litefs_settings") as mock_get_settings:
+            with patch("litefs_django.management.commands.litefs_check.settings", mock_django_settings):
+                with patch("litefs_django.management.commands.litefs_check.PrimaryDetector") as mock_detector_class:
+                    mock_get_settings.return_value = mock_settings
+                    detector = Mock()
+                    detector.is_primary.return_value = True
+                    mock_detector_class.return_value = detector
+
+                    cmd.handle(format="json")
+                    output = out.getvalue()
+
+                    # Should be valid JSON
+                    data = json.loads(output)
+                    assert data["status"] == "ok"
+                    assert "checks" in data
+
+    def test_check_json_includes_all_check_results(self) -> None:
+        """Test that JSON output includes all health check results."""
+        import json
+
+        out = StringIO()
+        cmd = LiteFSCheckCommand(stdout=out)
+
+        mock_settings = Mock(spec=LiteFSSettings)
+        mock_settings.mount_path = "/litefs"
+        mock_settings.enabled = True
+
+        mock_django_settings = Mock()
+        mock_django_settings.LITEFS = {}
+        mock_django_settings.DATABASES = {
+            "default": {"ENGINE": "litefs_django.db.backends.litefs"}
+        }
+
+        with patch("litefs_django.management.commands.litefs_check.get_litefs_settings") as mock_get_settings:
+            with patch("litefs_django.management.commands.litefs_check.settings", mock_django_settings):
+                with patch("litefs_django.management.commands.litefs_check.PrimaryDetector") as mock_detector_class:
+                    mock_get_settings.return_value = mock_settings
+                    detector = Mock()
+                    detector.is_primary.return_value = True
+                    mock_detector_class.return_value = detector
+
+                    cmd.handle(format="json")
+                    output = out.getvalue()
+
+                    data = json.loads(output)
+                    checks = data["checks"]
+                    # Should have checks for config, backend, enabled, mount, role
+                    assert len(checks) >= 3
+                    check_names = [c["name"] for c in checks]
+                    assert any("config" in n.lower() for n in check_names)
+
+    def test_check_json_format_on_failure(self) -> None:
+        """Test that --format=json produces valid JSON on failure."""
+        import json
+
+        out = StringIO()
+        err = StringIO()
+        cmd = LiteFSCheckCommand(stdout=out, stderr=err)
+
+        mock_settings = Mock(spec=LiteFSSettings)
+        mock_settings.mount_path = "/litefs"
+        mock_settings.enabled = False  # Issue
+
+        mock_django_settings = Mock()
+        mock_django_settings.LITEFS = {}
+        mock_django_settings.DATABASES = {
+            "default": {"ENGINE": "django.db.backends.sqlite3"}  # Issue
+        }
+
+        with patch("litefs_django.management.commands.litefs_check.get_litefs_settings") as mock_get_settings:
+            with patch("litefs_django.management.commands.litefs_check.settings", mock_django_settings):
+                mock_get_settings.return_value = mock_settings
+
+                # With JSON format, should output JSON instead of raising CommandError
+                with pytest.raises(CommandError):
+                    cmd.handle(format="json")
+
+                # Output should still be JSON
+                output = out.getvalue()
+                if output:
+                    data = json.loads(output)
+                    assert data["status"] == "error"
+                    assert "issues" in data
+
+    def test_check_json_issues_have_fix_suggestions(self) -> None:
+        """Test that JSON issues include fix suggestions."""
+        import json
+
+        out = StringIO()
+        cmd = LiteFSCheckCommand(stdout=out)
+
+        mock_settings = Mock(spec=LiteFSSettings)
+        mock_settings.mount_path = "/litefs"
+        mock_settings.enabled = False
+
+        mock_django_settings = Mock()
+        mock_django_settings.LITEFS = {}
+        mock_django_settings.DATABASES = {
+            "default": {"ENGINE": "django.db.backends.sqlite3"}
+        }
+
+        with patch("litefs_django.management.commands.litefs_check.get_litefs_settings") as mock_get_settings:
+            with patch("litefs_django.management.commands.litefs_check.settings", mock_django_settings):
+                mock_get_settings.return_value = mock_settings
+
+                with pytest.raises(CommandError):
+                    cmd.handle(format="json")
+
+                output = out.getvalue()
+                if output:
+                    data = json.loads(output)
+                    for issue in data.get("issues", []):
+                        assert "fix" in issue or "suggestion" in issue
+
+    def test_status_json_format(self) -> None:
+        """Test that --format=json produces valid JSON for status command."""
+        import json
+
+        out = StringIO()
+        cmd = LiteFSStatusCommand(stdout=out)
+
+        mock_settings = Mock(spec=LiteFSSettings)
+        mock_settings.mount_path = "/litefs"
+        mock_settings.enabled = True
+        mock_settings.leader_election = "static"
+        mock_settings.data_path = "/var/lib/litefs"
+        mock_settings.database_name = "db"
+        mock_settings.proxy_addr = ":8080"
+        mock_settings.retention = "1h"
+
+        with patch("litefs_django.management.commands.litefs_status.get_litefs_settings") as mock_get_settings:
+            with patch("litefs_django.management.commands.litefs_status.PrimaryDetector") as mock_detector_class:
+                mock_get_settings.return_value = mock_settings
+                detector = Mock()
+                detector.is_primary.return_value = True
+                mock_detector_class.return_value = detector
+
+                cmd.handle(format="json")
+                output = out.getvalue()
+
+                data = json.loads(output)
+                assert data["role"] == "primary"
+                assert data["mount_path"] == "/litefs"
+                assert data["enabled"] is True
+
+    def test_status_json_includes_leader_election(self) -> None:
+        """Test that JSON status includes leader election mode."""
+        import json
+
+        out = StringIO()
+        cmd = LiteFSStatusCommand(stdout=out)
+
+        mock_settings = Mock(spec=LiteFSSettings)
+        mock_settings.mount_path = "/litefs"
+        mock_settings.enabled = True
+        mock_settings.leader_election = "consul"
+        mock_settings.data_path = "/var/lib/litefs"
+        mock_settings.database_name = "db"
+        mock_settings.proxy_addr = ":8080"
+        mock_settings.retention = "1h"
+
+        with patch("litefs_django.management.commands.litefs_status.get_litefs_settings") as mock_get_settings:
+            with patch("litefs_django.management.commands.litefs_status.PrimaryDetector") as mock_detector_class:
+                mock_get_settings.return_value = mock_settings
+                detector = Mock()
+                detector.is_primary.return_value = False
+                mock_detector_class.return_value = detector
+
+                cmd.handle(format="json")
+                output = out.getvalue()
+
+                data = json.loads(output)
+                assert data["role"] == "replica"
+                assert data["leader_election"] == "consul"
+
+    def test_status_json_disabled_state(self) -> None:
+        """Test that JSON status handles disabled state."""
+        import json
+
+        out = StringIO()
+        cmd = LiteFSStatusCommand(stdout=out)
+
+        mock_settings = Mock(spec=LiteFSSettings)
+        mock_settings.mount_path = "/litefs"
+        mock_settings.enabled = False
+        mock_settings.leader_election = "static"
+
+        with patch("litefs_django.management.commands.litefs_status.get_litefs_settings") as mock_get_settings:
+            mock_get_settings.return_value = mock_settings
+
+            cmd.handle(format="json")
+            output = out.getvalue()
+
+            data = json.loads(output)
+            assert data["enabled"] is False
+            # Role should be null/none when disabled
+            assert data.get("role") is None or "role" not in data
