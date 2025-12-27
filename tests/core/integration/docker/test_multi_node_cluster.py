@@ -20,7 +20,7 @@ import pytest
 
 # ClusterFixture is imported from parent conftest.py via pytest's conftest inheritance
 if TYPE_CHECKING:
-    from tests.core.integration.conftest import ClusterFixture
+    from ..conftest import ClusterFixture
 
 
 @pytest.fixture
@@ -37,7 +37,7 @@ def three_node_cluster(tmp_path: Path) -> Generator["ClusterFixture", None, None
         Initialized and started ClusterFixture instance with 3 nodes.
     """
     # Import at runtime from parent conftest (pytest makes it available)
-    from tests.core.integration.conftest import ClusterFixture
+    from ..conftest import ClusterFixture
 
     fixture = ClusterFixture(
         cluster_name="test-cluster-3node",

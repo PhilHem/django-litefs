@@ -72,3 +72,4 @@ class TestSQLDetector:
         # But actual write operation in CTE should still be detected
         assert detector.is_write_operation("WITH UPDATE AS (SELECT 1) UPDATE test SET x = 1") is True
 
+

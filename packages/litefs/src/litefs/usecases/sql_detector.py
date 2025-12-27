@@ -128,3 +128,4 @@ class SQLDetector:
             return bool(_CTE_WRITE_KEYWORD_RE.search(main_query))
 
         return False
+

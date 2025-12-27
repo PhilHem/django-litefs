@@ -11,25 +11,18 @@ Tests verify:
 from __future__ import annotations
 
 import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Generator
 
 import pytest
 
-# Import ClusterFixture from parent conftest
-conftest_path = Path(__file__).parent.parent / "conftest.py"
-sys.path.insert(0, str(conftest_path.parent))
-
 if TYPE_CHECKING:
-    from conftest import ClusterFixture  # type: ignore[import-not-found] # noqa: F401
+    from ..conftest import ClusterFixture  # noqa: F401
 
 
 @pytest.fixture
-def three_node_cluster_partition(
-    tmp_path: Path, skip_if_no_litefs: None
-) -> Generator:  # type: ignore[type-arg]
+def three_node_cluster_partition(tmp_path: Path, skip_if_no_litefs: None) -> Generator:  # type: ignore[type-arg]
     """Provide a 3-node ClusterFixture for partition testing.
 
     Creates and starts a 3-node cluster for partition/healing scenarios.
@@ -42,7 +35,7 @@ def three_node_cluster_partition(
     Yields:
         Initialized and started ClusterFixture instance with 3 nodes.
     """
-    from conftest import ClusterFixture  # noqa: F401,E402
+    from ..conftest import ClusterFixture
 
     fixture = ClusterFixture(
         cluster_name="test-cluster-partition",
@@ -89,7 +82,8 @@ class TestQuorumBasedLeaderElection:
 
         # Stop one node (creates 2/3 partition)
         try:
-            result = subprocess.run([
+            result = subprocess.run(
+                [
                     "docker-compose",
                     "--project-name",
                     three_node_cluster_partition.cluster_name,
@@ -100,7 +94,11 @@ class TestQuorumBasedLeaderElection:
                     ),
                     "stop",
                     "node-3",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
             assert result.returncode == 0, f"Failed to stop node: {result.stderr}"
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
@@ -109,7 +107,8 @@ class TestQuorumBasedLeaderElection:
 
         # Verify 2 nodes still running
         try:
-            result = subprocess.run([
+            result = subprocess.run(
+                [
                     "docker-compose",
                     "--project-name",
                     three_node_cluster_partition.cluster_name,
@@ -160,7 +159,11 @@ class TestQuorumBasedLeaderElection:
                     "stop",
                     "node-2",
                     "node-3",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
             assert result.returncode == 0
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
@@ -169,7 +172,8 @@ class TestQuorumBasedLeaderElection:
 
         # Verify only 1 node running
         try:
-            result = subprocess.run([
+            result = subprocess.run(
+                [
                     "docker-compose",
                     "--project-name",
                     three_node_cluster_partition.cluster_name,
@@ -226,7 +230,11 @@ class TestPartitionHealing:
                     ),
                     "stop",
                     "node-1",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
             assert result.returncode == 0
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
@@ -235,7 +243,8 @@ class TestPartitionHealing:
 
         # Verify 2/3 running
         try:
-            result = subprocess.run([
+            result = subprocess.run(
+                [
                     "docker-compose",
                     "--project-name",
                     three_node_cluster_partition.cluster_name,
@@ -268,7 +277,11 @@ class TestPartitionHealing:
                     ),
                     "start",
                     "node-1",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
             assert result.returncode == 0, f"Failed to start node: {result.stderr}"
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
@@ -278,7 +291,8 @@ class TestPartitionHealing:
 
         # Verify all 3 nodes running again
         try:
-            result = subprocess.run([
+            result = subprocess.run(
+                [
                     "docker-compose",
                     "--project-name",
                     three_node_cluster_partition.cluster_name,
@@ -329,7 +343,11 @@ class TestPartitionHealing:
                     ),
                     "stop",
                     "node-3",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
             assert result.returncode == 0
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
@@ -338,7 +356,8 @@ class TestPartitionHealing:
 
         # Verify 2/3 still healthy
         try:
-            result = subprocess.run([
+            result = subprocess.run(
+                [
                     "docker-compose",
                     "--project-name",
                     three_node_cluster_partition.cluster_name,
@@ -370,7 +389,11 @@ class TestPartitionHealing:
                         / "docker-compose.yml"
                     ),
                     "start",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
             assert result.returncode == 0
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
@@ -409,7 +432,8 @@ class TestNetworkPartitionScenarios:
 
         # Stop node-1 (2/3 quorum)
         try:
-            subprocess.run([
+            subprocess.run(
+                [
                     "docker-compose",
                     "--project-name",
                     three_node_cluster_partition.cluster_name,
@@ -420,7 +444,11 @@ class TestNetworkPartitionScenarios:
                     ),
                     "stop",
                     "node-1",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
 
@@ -428,7 +456,8 @@ class TestNetworkPartitionScenarios:
 
         # Stop node-2 (1/3 no quorum)
         try:
-            result = subprocess.run([
+            result = subprocess.run(
+                [
                     "docker-compose",
                     "--project-name",
                     three_node_cluster_partition.cluster_name,
@@ -439,7 +468,11 @@ class TestNetworkPartitionScenarios:
                     ),
                     "stop",
                     "node-2",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
             assert result.returncode == 0
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
@@ -448,7 +481,8 @@ class TestNetworkPartitionScenarios:
 
         # Only 1 node running - no quorum
         try:
-            result = subprocess.run([
+            result = subprocess.run(
+                [
                     "docker-compose",
                     "--project-name",
                     three_node_cluster_partition.cluster_name,
@@ -481,7 +515,11 @@ class TestNetworkPartitionScenarios:
                     ),
                     "start",
                     "node-2",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
             assert result.returncode == 0
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
@@ -490,7 +528,8 @@ class TestNetworkPartitionScenarios:
 
         # Should have 2/3 again
         try:
-            result = subprocess.run([
+            result = subprocess.run(
+                [
                     "docker-compose",
                     "--project-name",
                     three_node_cluster_partition.cluster_name,
@@ -538,7 +577,11 @@ class TestNetworkPartitionScenarios:
                         / "docker-compose.yml"
                     ),
                     "stop",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
             assert result.returncode == 0
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
@@ -547,7 +590,8 @@ class TestNetworkPartitionScenarios:
 
         # Verify all stopped
         try:
-            result = subprocess.run([
+            result = subprocess.run(
+                [
                     "docker-compose",
                     "--project-name",
                     three_node_cluster_partition.cluster_name,
@@ -579,7 +623,11 @@ class TestNetworkPartitionScenarios:
                         / "docker-compose.yml"
                     ),
                     "start",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
             assert result.returncode == 0
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
@@ -646,7 +694,11 @@ class TestAdvancedPartitionScenarios:
                     ),
                     "stop",
                     "node-1",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
 
@@ -688,7 +740,11 @@ class TestAdvancedPartitionScenarios:
                     ),
                     "start",
                     "node-1",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
 
@@ -711,7 +767,11 @@ class TestAdvancedPartitionScenarios:
                     ),
                     "stop",
                     "node-2",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
 
@@ -769,7 +829,11 @@ class TestAdvancedPartitionScenarios:
                     ),
                     "stop",
                     "node-3",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
 
@@ -792,7 +856,11 @@ class TestAdvancedPartitionScenarios:
                     ),
                     "start",
                     "node-3",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
 
@@ -832,7 +900,11 @@ class TestAdvancedPartitionScenarios:
                     ),
                     "stop",
                     "node-2",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
 
@@ -874,7 +946,11 @@ class TestAdvancedPartitionScenarios:
                     ),
                     "start",
                     "node-2",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
 

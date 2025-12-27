@@ -31,3 +31,4 @@ class TestSettingsResetFixture:
         # After test, fixture should restore (this is verified by next test run)
         # We can't directly test restoration in same test, but we verify it works
         # by checking that modifications don't persist across tests
+

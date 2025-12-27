@@ -46,3 +46,4 @@ class SplitBrainError(DatabaseError):
     """
 
     pass
+

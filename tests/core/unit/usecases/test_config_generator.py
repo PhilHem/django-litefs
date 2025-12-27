@@ -508,3 +508,4 @@ class TestConfigGeneratorProxy:
         assert parsed["proxy"]["addr"] == ":8080"
 
 
+

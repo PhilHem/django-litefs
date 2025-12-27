@@ -12,6 +12,7 @@ from litefs.domain.split_brain import RaftNodeState, RaftClusterState
 from litefs_django.db.backends.litefs.base import DatabaseWrapper, LiteFSCursor
 from litefs_django.exceptions import NotPrimaryError, SplitBrainError
 from .conftest import create_litefs_settings_dict
+from django.test import override_settings
 
 
 @pytest.mark.tier(1)
@@ -19,6 +20,7 @@ from .conftest import create_litefs_settings_dict
 class TestDatabaseBackend:
     """Test LiteFS database backend."""
 
+    @override_settings(LITEFS={"ENABLED": True})
     def test_backend_initialization(self):
         """Test that DatabaseWrapper can be initialized."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -39,6 +41,7 @@ class TestDatabaseBackend:
             expected_settings["NAME"] = str(mount_path / "test.db")
             assert wrapper.settings_dict == expected_settings
 
+    @override_settings(LITEFS={"ENABLED": True})
     def test_uses_litefs_mount_path_for_database(self):
         """Test that database path uses LiteFS mount path."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -220,6 +223,7 @@ class TestDatabaseBackend:
                 f"BEGIN IMMEDIATE not found in transaction start. Found: {begin_statements}"
             )
 
+    @override_settings(LITEFS={"ENABLED": True})
     def test_start_transaction_under_autocommit_uses_immediate(self):
         """Test that _start_transaction_under_autocommit executes BEGIN IMMEDIATE (DJANGO-020)."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -770,3 +774,233 @@ class TestSplitBrainDetectionInCursor:
         from django.db import DatabaseError
 
         assert issubclass(SplitBrainError, DatabaseError)
+
+
+@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Django.DevMode")
+class TestDevMode:
+    """Test dev mode bypass functionality."""
+
+    @override_settings(LITEFS={"ENABLED": False})
+    def test_dev_mode_initialization_skips_mount_path_validation(self):
+        """Test that dev mode skips mount path validation."""
+        # Use a nonexistent mount path - should not raise error in dev mode
+        settings_dict = {
+            "ENGINE": "litefs_django.db.backends.litefs",
+            "NAME": "test.db",
+            "OPTIONS": {
+                "litefs_mount_path": "/nonexistent/path",
+            },
+        }
+
+        # Should not raise error even though mount path doesn't exist
+        wrapper = DatabaseWrapper(settings_dict)
+        assert wrapper._dev_mode is True
+
+    @override_settings(LITEFS={"ENABLED": False})
+    def test_dev_mode_uses_standard_sqlite_path(self):
+        """Test that dev mode uses standard SQLite path (not mount_path)."""
+        settings_dict = {
+            "ENGINE": "litefs_django.db.backends.litefs",
+            "NAME": "dev.db",
+            "OPTIONS": {
+                "litefs_mount_path": "/mnt/litefs",
+            },
+        }
+
+        wrapper = DatabaseWrapper(settings_dict)
+        # In dev mode, NAME should remain as-is (not prepended with mount_path)
+        assert wrapper.settings_dict["NAME"] == "dev.db"
+
+    @override_settings(LITEFS={"ENABLED": False})
+    def test_dev_mode_skips_primary_check_on_write(self):
+        """Test that dev mode skips primary check on write operations."""
+        import sqlite3
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.db"
+            connection = sqlite3.connect(str(db_path))
+            connection.execute("CREATE TABLE users (name TEXT)")
+
+            # Create a mock primary detector that returns False (replica)
+            mock_primary_detector = Mock()
+            mock_primary_detector.is_primary.return_value = False
+
+            # Create cursor in dev mode
+            cursor = LiteFSCursor(
+                connection,
+                primary_detector=mock_primary_detector,
+                dev_mode=True,
+            )
+
+            # Write should succeed (no NotPrimaryError) because dev_mode=True
+            cursor.execute("INSERT INTO users VALUES ('Alice')")
+            connection.commit()
+
+            # Verify write succeeded
+            result = connection.execute("SELECT name FROM users").fetchall()
+            assert result == [("Alice",)]
+
+            # Verify primary detector was NOT called
+            mock_primary_detector.is_primary.assert_not_called()
+
+    @override_settings(LITEFS={"ENABLED": False})
+    def test_dev_mode_skips_split_brain_check_on_write(self):
+        """Test that dev mode skips split-brain check on write operations."""
+        import sqlite3
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.db"
+            connection = sqlite3.connect(str(db_path))
+            connection.execute("CREATE TABLE users (name TEXT)")
+
+            # Create a mock split-brain detector that detects split-brain
+            mock_split_brain_detector = Mock()
+            split_brain_status = SplitBrainStatus(
+                is_split_brain=True,
+                leader_nodes=[
+                    RaftNodeState(node_id="node-1", is_leader=True),
+                    RaftNodeState(node_id="node-2", is_leader=True),
+                ],
+            )
+            mock_split_brain_detector.detect_split_brain.return_value = split_brain_status
+
+            mock_primary_detector = Mock()
+            mock_primary_detector.is_primary.return_value = True
+
+            # Create cursor in dev mode
+            cursor = LiteFSCursor(
+                connection,
+                primary_detector=mock_primary_detector,
+                split_brain_detector=mock_split_brain_detector,
+                dev_mode=True,
+            )
+
+            # Write should succeed (no SplitBrainError) because dev_mode=True
+            cursor.execute("INSERT INTO users VALUES ('Bob')")
+            connection.commit()
+
+            # Verify write succeeded
+            result = connection.execute("SELECT name FROM users").fetchall()
+            assert result == [("Bob",)]
+
+            # Verify split-brain detector was NOT called
+            mock_split_brain_detector.detect_split_brain.assert_not_called()
+
+    @override_settings(LITEFS=None)
+    def test_dev_mode_when_litefs_settings_missing(self):
+        """Test that dev mode is enabled when LITEFS settings dict is missing."""
+        settings_dict = {
+            "ENGINE": "litefs_django.db.backends.litefs",
+            "NAME": "test.db",
+            "OPTIONS": {
+                "litefs_mount_path": "/mnt/litefs",
+            },
+        }
+
+        wrapper = DatabaseWrapper(settings_dict)
+        assert wrapper._dev_mode is True
+
+    @override_settings(LITEFS={"ENABLED": True})
+    def test_production_mode_when_enabled_true(self):
+        """Test that production mode is used when LITEFS.enabled is True."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mount_path = Path(tmpdir) / "litefs"
+            mount_path.mkdir()
+
+            settings_dict = {
+                "ENGINE": "litefs_django.db.backends.litefs",
+                "NAME": "test.db",
+                "OPTIONS": {
+                    "litefs_mount_path": str(mount_path),
+                },
+            }
+
+            wrapper = DatabaseWrapper(settings_dict)
+            assert wrapper._dev_mode is False
+
+    @override_settings(LITEFS={"MOUNT_PATH": "/mnt/litefs"})
+    def test_production_mode_when_enabled_not_specified(self):
+        """Test that production mode is used when LITEFS.enabled is not specified."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mount_path = Path(tmpdir) / "litefs"
+            mount_path.mkdir()
+
+            settings_dict = {
+                "ENGINE": "litefs_django.db.backends.litefs",
+                "NAME": "test.db",
+                "OPTIONS": {
+                    "litefs_mount_path": str(mount_path),
+                },
+            }
+
+            wrapper = DatabaseWrapper(settings_dict)
+            assert wrapper._dev_mode is False
+
+    @override_settings(LITEFS={"ENABLED": False})
+    def test_dev_mode_skips_mount_path_validation_in_get_new_connection(self):
+        """Test that dev mode skips mount path validation in get_new_connection."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.db"
+            settings_dict = {
+                "ENGINE": "litefs_django.db.backends.litefs",
+                "NAME": str(db_path),
+                "OPTIONS": {
+                    "litefs_mount_path": "/nonexistent/path",
+                },
+            }
+
+            wrapper = DatabaseWrapper(settings_dict)
+            # Should not raise error even though mount path doesn't exist
+            conn_params = wrapper.get_connection_params()
+            conn = wrapper.get_new_connection(conn_params)
+            assert conn is not None
+            conn.close()
+
+    @override_settings(LITEFS={"ENABLED": False})
+    def test_dev_mode_executescript_bypasses_checks(self):
+        """Test that dev mode bypasses checks in executescript."""
+        import sqlite3
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.db"
+            connection = sqlite3.connect(str(db_path))
+
+            # Create mocks that would fail in production mode
+            mock_primary_detector = Mock()
+            mock_primary_detector.is_primary.return_value = False  # Replica
+
+            mock_split_brain_detector = Mock()
+            split_brain_status = SplitBrainStatus(
+                is_split_brain=True,
+                leader_nodes=[
+                    RaftNodeState(node_id="node-1", is_leader=True),
+                    RaftNodeState(node_id="node-2", is_leader=True),
+                ],
+            )
+            mock_split_brain_detector.detect_split_brain.return_value = split_brain_status
+
+            # Create cursor in dev mode
+            cursor = LiteFSCursor(
+                connection,
+                primary_detector=mock_primary_detector,
+                split_brain_detector=mock_split_brain_detector,
+                dev_mode=True,
+            )
+
+            # Script execution should succeed in dev mode
+            cursor.executescript(
+                "CREATE TABLE users (name TEXT); INSERT INTO users VALUES ('Charlie');"
+            )
+            connection.commit()
+
+            # Verify script executed successfully
+            result = connection.execute("SELECT name FROM users").fetchall()
+            assert result == [("Charlie",)]
+
+            # Verify detectors were NOT called
+            mock_primary_detector.is_primary.assert_not_called()
+            mock_split_brain_detector.detect_split_brain.assert_not_called()

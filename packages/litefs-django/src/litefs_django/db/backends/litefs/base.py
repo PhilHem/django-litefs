@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from django.conf import settings as django_settings
 from django.db.backends.sqlite3.base import (
     DatabaseWrapper as SQLite3DatabaseWrapper,
     SQLiteCursorWrapper as SQLite3Cursor,
@@ -13,8 +14,10 @@ from django.db.backends.sqlite3.base import (
 from litefs.adapters.ports import PrimaryDetectorPort, SplitBrainDetectorPort
 from litefs.usecases.mount_validator import MountValidator
 from litefs.usecases.primary_detector import PrimaryDetector
+from litefs.usecases.split_brain_detector import SplitBrainDetector
 from litefs.usecases.sql_detector import SQLDetector
 from litefs_django.exceptions import NotPrimaryError, SplitBrainError
+from litefs_django.settings import is_dev_mode
 
 if TYPE_CHECKING:
     from sqlite3 import Connection
@@ -27,7 +30,8 @@ class LiteFSCursor(SQLite3Cursor):
         self,
         connection: "Connection",
         primary_detector: PrimaryDetectorPort,
-        split_brain_detector: SplitBrainDetectorPort | None = None,
+        split_brain_detector: SplitBrainDetector | None = None,
+        dev_mode: bool = False,
     ) -> None:
         """Initialize LiteFS cursor.
 
@@ -38,11 +42,13 @@ class LiteFSCursor(SQLite3Cursor):
             split_brain_detector: Optional SplitBrainDetector use case instance
                 for detecting split-brain conditions. If provided, split-brain
                 check is performed BEFORE primary status check on write operations.
+            dev_mode: If True, skip all LiteFS-specific checks (primary, split-brain).
         """
         super().__init__(connection)
         self._primary_detector = primary_detector
         self._split_brain_detector = split_brain_detector
         self._sql_detector = SQLDetector()
+        self._dev_mode = dev_mode
 
     def _check_split_brain_before_write(self, sql: str) -> None:
         """Check for split-brain condition before write operations.
@@ -53,6 +59,10 @@ class LiteFSCursor(SQLite3Cursor):
         Raises:
             SplitBrainError: If split-brain is detected on a write operation
         """
+        # Skip checks in dev mode
+        if self._dev_mode:
+            return
+
         if not self._split_brain_detector:
             # No detector provided, skip check
             return
@@ -84,6 +94,10 @@ class LiteFSCursor(SQLite3Cursor):
         Raises:
             NotPrimaryError: If this node is not primary (replica)
         """
+        # Skip checks in dev mode
+        if self._dev_mode:
+            return
+
         if self._sql_detector.is_write_operation(sql):
             try:
                 if not self._primary_detector.is_primary():
@@ -156,6 +170,10 @@ class LiteFSCursor(SQLite3Cursor):
             SplitBrainError: If split-brain detected
             NotPrimaryError: If attempted on replica
         """
+        # Skip checks in dev mode
+        if self._dev_mode:
+            return super().executescript(sql_script)
+
         # Check split-brain first (scripts can be writes)
         if self._split_brain_detector:
             try:
@@ -203,7 +221,7 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
         alias: str = "default",
         *,
         primary_detector: PrimaryDetectorPort | None = None,
-        split_brain_detector: SplitBrainDetectorPort | None = None,
+        split_brain_detector: SplitBrainDetector | None = None,
     ) -> None:
         """Initialize LiteFS database backend.
 
@@ -217,6 +235,10 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
                 injection. If not provided, a new SplitBrainDetector is created.
                 Use this for testing with FakeSplitBrainDetector.
         """
+        # Check if dev mode is enabled
+        litefs_config = getattr(django_settings, "LITEFS", None)
+        self._dev_mode = is_dev_mode(litefs_config)
+
         # Extract OPTIONS for configuration validation
         options = settings_dict.get("OPTIONS", {})
 
@@ -232,6 +254,41 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
         # Extract LiteFS mount path from OPTIONS
         mount_path = options.get("litefs_mount_path")
 
+        # Initialize detectors (used in both dev and production mode)
+        if primary_detector is not None:
+            primary_detector_instance: PrimaryDetectorPort = primary_detector
+        else:
+            # Create a detector - in dev mode it won't be used, but needed for type consistency
+            primary_detector_instance = PrimaryDetector(mount_path or "/tmp")
+
+        if split_brain_detector is not None:
+            split_brain_detector_instance: SplitBrainDetector | None = (
+                split_brain_detector
+            )
+        else:
+            split_brain_detector_instance = None
+
+        if self._dev_mode:
+            # In dev mode, skip mount path validation and use standard SQLite behavior
+            # Use the original NAME path directly (don't modify it)
+            original_name = settings_dict.get("NAME", "db.sqlite3")
+            settings_dict = settings_dict.copy()
+            # Keep original path (don't prepend mount_path)
+            settings_dict["NAME"] = original_name
+
+            # Initialize parent SQLite3 backend (Django 5.x)
+            super().__init__(settings_dict, alias=alias)
+
+            # Store detectors (won't be used in dev mode, but needed for type consistency)
+            self._primary_detector = primary_detector_instance
+            self._split_brain_detector = split_brain_detector_instance
+            self._mount_path = mount_path or "/tmp"
+
+            # Store validated transaction mode
+            self._transaction_mode = transaction_mode
+            return
+
+        # Production mode: validate mount path and use LiteFS behavior
         if not mount_path:
             raise ValueError("litefs_mount_path is required in OPTIONS")
 
@@ -248,23 +305,10 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
         # Initialize parent SQLite3 backend (Django 5.x)
         super().__init__(settings_dict, alias=alias)
 
-        # Use injected detector or create PrimaryDetector use case
-        # (Clean Architecture: delegate to use case, allow DI for testing)
-        if primary_detector is not None:
-            self._primary_detector: PrimaryDetectorPort = primary_detector
-        else:
-            self._primary_detector = PrimaryDetector(mount_path)
+        # Store detectors
+        self._primary_detector = primary_detector_instance
+        self._split_brain_detector = split_brain_detector_instance
         self._mount_path = mount_path
-
-        # Use injected split-brain detector or create SplitBrainDetector use case
-        if split_brain_detector is not None:
-            self._split_brain_detector: SplitBrainDetectorPort | None = (
-                split_brain_detector
-            )
-        else:
-            # Create default SplitBrainDetector (will use default port implementations)
-            # For now, we'll defer creation to allow flexibility in port resolution
-            self._split_brain_detector = None
 
         # Store validated transaction mode
         self._transaction_mode = transaction_mode
@@ -286,24 +330,28 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
         Raises:
             LiteFSNotRunningError: If mount_path doesn't exist (DJANGO-025)
         """
-        # Validate mount_path exists before attempting connection (DJANGO-025)
-        # This provides clear error handling and prevents inconsistent error types
-        mount_path_obj = Path(self._mount_path)
-        validator = MountValidator()
-        validator.validate(mount_path_obj)
+        # Skip mount path validation in dev mode
+        if not self._dev_mode:
+            # Validate mount_path exists before attempting connection (DJANGO-025)
+            # This provides clear error handling and prevents inconsistent error types
+            mount_path_obj = Path(self._mount_path)
+            validator = MountValidator()
+            validator.validate(mount_path_obj)
 
         # Set transaction mode to configured value (default: IMMEDIATE)
         conn_params.setdefault("isolation_level", None)
         connection = super().get_new_connection(conn_params)
 
-        # Set configured transaction mode
-        cursor = connection.cursor()
-        try:
-            cursor.execute("PRAGMA journal_mode=WAL")  # LiteFS requires WAL
-            cursor.execute(f"BEGIN {self._transaction_mode}")
-            cursor.execute("COMMIT")
-        finally:
-            cursor.close()
+        # In production mode, set WAL mode and transaction mode (LiteFS requires WAL)
+        # In dev mode, skip these settings (standard SQLite behavior)
+        if not self._dev_mode:
+            cursor = connection.cursor()
+            try:
+                cursor.execute("PRAGMA journal_mode=WAL")  # LiteFS requires WAL
+                cursor.execute(f"BEGIN {self._transaction_mode}")
+                cursor.execute("COMMIT")
+            finally:
+                cursor.close()
 
         return connection
 
@@ -313,6 +361,7 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
             self.connection,
             primary_detector=self._primary_detector,
             split_brain_detector=self._split_brain_detector,
+            dev_mode=self._dev_mode,
         )
 
     def _start_transaction_under_autocommit(self):
