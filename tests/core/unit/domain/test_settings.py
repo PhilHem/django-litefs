@@ -4,7 +4,7 @@ import pytest
 from pathlib import Path
 from hypothesis import given, strategies as st
 
-from litefs.domain.settings import LiteFSSettings, LiteFSConfigError
+from litefs.domain.settings import LiteFSSettings, LiteFSConfigError, ForwardingSettings
 
 
 @pytest.mark.tier(1)
@@ -475,6 +475,99 @@ class TestPathSanitizationPBT:
             # If validation fails, should be for a valid reason
             pass
 
+
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant.LiteFSSettings")
+class TestForwardingField:
+    """Test forwarding field in LiteFSSettings."""
+
+    def test_forwarding_defaults_to_none(self) -> None:
+        """Test that forwarding defaults to None when not provided."""
+        settings = LiteFSSettings(
+            mount_path="/litefs",
+            data_path="/var/lib/litefs",
+            database_name="db.sqlite3",
+            leader_election="static",
+            proxy_addr=":8080",
+            enabled=True,
+            retention="1h",
+        )
+        assert settings.forwarding is None
+
+    def test_forwarding_can_be_set(self) -> None:
+        """Test that forwarding can be set to a ForwardingSettings instance."""
+        forwarding = ForwardingSettings(
+            enabled=True,
+            primary_url="http://primary:8080",
+            timeout_seconds=60.0,
+            retry_count=3,
+            excluded_paths=("/health", "/metrics"),
+            scheme="https",
+        )
+        settings = LiteFSSettings(
+            mount_path="/litefs",
+            data_path="/var/lib/litefs",
+            database_name="db.sqlite3",
+            leader_election="static",
+            proxy_addr=":8080",
+            enabled=True,
+            retention="1h",
+            forwarding=forwarding,
+        )
+        assert settings.forwarding is not None
+        assert settings.forwarding.enabled is True
+        assert settings.forwarding.primary_url == "http://primary:8080"
+        assert settings.forwarding.timeout_seconds == 60.0
+        assert settings.forwarding.retry_count == 3
+        assert settings.forwarding.excluded_paths == ("/health", "/metrics")
+        assert settings.forwarding.scheme == "https"
+
+    def test_forwarding_with_defaults(self) -> None:
+        """Test that forwarding can be set with default values."""
+        forwarding = ForwardingSettings()
+        settings = LiteFSSettings(
+            mount_path="/litefs",
+            data_path="/var/lib/litefs",
+            database_name="db.sqlite3",
+            leader_election="static",
+            proxy_addr=":8080",
+            enabled=True,
+            retention="1h",
+            forwarding=forwarding,
+        )
+        assert settings.forwarding is not None
+        assert settings.forwarding.enabled is False
+        assert settings.forwarding.primary_url is None
+        assert settings.forwarding.timeout_seconds == 30.0
+        assert settings.forwarding.retry_count == 1
+        assert settings.forwarding.excluded_paths == ()
+        assert settings.forwarding.scheme == "http"
+
+    def test_forwarding_and_proxy_can_coexist(self) -> None:
+        """Test that forwarding and proxy can both be set."""
+        from litefs.domain.settings import ProxySettings
+
+        forwarding = ForwardingSettings(enabled=True, primary_url="http://primary:8080")
+        proxy = ProxySettings(
+            addr=":8080",
+            target="localhost:8081",
+            db="db.sqlite3",
+        )
+        settings = LiteFSSettings(
+            mount_path="/litefs",
+            data_path="/var/lib/litefs",
+            database_name="db.sqlite3",
+            leader_election="static",
+            proxy_addr=":8080",
+            enabled=True,
+            retention="1h",
+            forwarding=forwarding,
+            proxy=proxy,
+        )
+        assert settings.forwarding is not None
+        assert settings.proxy is not None
+        assert settings.forwarding.enabled is True
+        assert settings.proxy.addr == ":8080"
 
 
 

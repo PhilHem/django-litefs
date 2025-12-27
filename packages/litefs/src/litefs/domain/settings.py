@@ -183,6 +183,7 @@ class LiteFSSettings:
     raft_peers: list[str] | None = None
     static_leader_config: StaticLeaderConfig | None = None
     proxy: ProxySettings | None = None
+    forwarding: ForwardingSettings | None = None
 
     def __post_init__(self) -> None:
         """Validate settings after initialization."""
