@@ -1,11 +1,12 @@
-"""Django middleware for split-brain detection and handling.
+"""Django middleware for split-brain detection and write forwarding.
 
-This middleware checks for split-brain conditions on each request and prevents
-access to the application when multiple nodes claim leadership.
+This module provides two middleware classes:
 
-Split-brain occurs when network partitions cause cluster consensus to break down,
-resulting in multiple nodes believing they are the leader. This is a critical
-failure mode that must be detected and handled before accepting requests.
+1. SplitBrainMiddleware: Checks for split-brain conditions on each request and
+   prevents access when multiple nodes claim leadership.
+
+2. WriteForwardingMiddleware: Forwards write requests (POST, PUT, PATCH, DELETE)
+   from replica nodes to the primary node.
 
 Usage:
     Add to Django MIDDLEWARE in settings:
@@ -13,14 +14,21 @@ Usage:
         MIDDLEWARE = [
             ...
             'litefs_django.middleware.SplitBrainMiddleware',
+            'litefs_django.middleware.WriteForwardingMiddleware',
             ...
         ]
 
-    The middleware will:
+    SplitBrainMiddleware will:
     1. Check cluster state on each request
     2. Return 503 Service Unavailable if split-brain detected
     3. Send split_brain_detected signal for monitoring/logging
     4. Fail open (allow requests) if split-brain detection fails
+
+    WriteForwardingMiddleware will:
+    1. Detect if this node is a replica
+    2. Forward write requests to the primary node
+    3. Pass through responses from the primary
+    4. Add X-LiteFS-Forwarded and X-LiteFS-Primary-Node headers
 """
 
 from __future__ import annotations
@@ -32,7 +40,12 @@ from django.http import HttpResponse, HttpRequest
 from django.conf import settings as django_settings
 
 from litefs.usecases.split_brain_detector import SplitBrainDetector
-from litefs.adapters.ports import SplitBrainDetectorPort
+from litefs.adapters.ports import (
+    SplitBrainDetectorPort,
+    ForwardingPort,
+    ForwardingResult,
+    PrimaryDetectorPort,
+)
 from litefs_django.signals import split_brain_detected
 
 if TYPE_CHECKING:
@@ -152,9 +165,7 @@ class SplitBrainMiddleware:
             # Signal is sent for all detections (both split-brain and healthy)
             # Applications can filter in their receivers
             if status.is_split_brain:
-                split_brain_detected.send(
-                    sender=self.__class__, status=status
-                )
+                split_brain_detected.send(sender=self.__class__, status=status)
                 logger.error(
                     f"Split-brain detected: {len(status.leader_nodes)} nodes claim leadership"
                 )
@@ -184,4 +195,276 @@ class SplitBrainMiddleware:
             content_type="text/plain",
         )
         response["Retry-After"] = "30"  # Suggest retry after 30 seconds
+        return response
+
+
+# HTTP methods considered as writes that should be forwarded to primary
+_WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+class WriteForwardingMiddleware:
+    """Middleware to forward write requests from replica to primary.
+
+    This middleware intercepts write requests (POST, PUT, PATCH, DELETE) on
+    replica nodes and forwards them to the primary node. Read requests
+    (GET, HEAD, OPTIONS) are handled locally.
+
+    The middleware adds the following headers to forwarded responses:
+    - X-LiteFS-Forwarded: true
+    - X-LiteFS-Primary-Node: <primary_url>
+
+    Thread safety:
+        - Each request is handled independently
+        - No shared mutable state between requests
+    """
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        """Initialize the write forwarding middleware.
+
+        Args:
+            get_response: Django WSGI application callable
+        """
+        self.get_response = get_response
+
+        # These are set during initialization or via test injection
+        self._forwarding_port: ForwardingPort | None = None
+        self._primary_detector: PrimaryDetectorPort | None = None
+        self._primary_url: str | None = None
+        self._forwarding_enabled: bool = False
+        self._excluded_paths: tuple[str, ...] = ()
+
+        # Try to initialize from settings
+        self._initialize_forwarding()
+
+    def _initialize_forwarding(self) -> None:
+        """Initialize forwarding from Django settings.
+
+        Attempts to configure forwarding from LITEFS settings.
+        If initialization fails, forwarding remains disabled.
+        """
+        try:
+            from litefs_django.settings import get_litefs_settings
+
+            litefs_config = getattr(django_settings, "LITEFS", None)
+            if not litefs_config:
+                logger.debug("LITEFS settings not found. Write forwarding disabled.")
+                return
+
+            if not litefs_config.get("ENABLED", True):
+                logger.debug("LiteFS is disabled in settings. Forwarding disabled.")
+                return
+
+            # Get LiteFS settings domain object
+            litefs_settings = get_litefs_settings(litefs_config)
+
+            # Check if forwarding is configured and enabled
+            if not litefs_settings.forwarding or not litefs_settings.forwarding.enabled:
+                logger.debug("Write forwarding not enabled in settings.")
+                return
+
+            if not litefs_settings.forwarding.primary_url:
+                logger.warning(
+                    "Write forwarding enabled but PRIMARY_URL not set. Forwarding disabled."
+                )
+                return
+
+            self._primary_url = litefs_settings.forwarding.primary_url
+            self._excluded_paths = litefs_settings.forwarding.excluded_paths
+            self._forwarding_enabled = True
+
+            # Create primary detector
+            from litefs.usecases.primary_detector import PrimaryDetector
+
+            self._primary_detector = PrimaryDetector(litefs_settings.mount_path)
+
+            logger.debug(
+                f"WriteForwardingMiddleware initialized. Primary URL: {self._primary_url}"
+            )
+
+        except Exception as e:
+            logger.warning(
+                f"Failed to initialize WriteForwardingMiddleware: {e}. "
+                "Write forwarding disabled."
+            )
+            self._forwarding_enabled = False
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        """Process request through write forwarding logic.
+
+        Forwards write requests to primary if this is a replica node.
+        Read requests and requests on primary are handled locally.
+
+        Args:
+            request: Django HttpRequest object
+
+        Returns:
+            Response from primary (if forwarded) or local application response
+        """
+        # If forwarding is not enabled, pass through
+        if not self._forwarding_enabled:
+            return self.get_response(request)
+
+        # If no forwarding port configured, pass through
+        if self._forwarding_port is None:
+            return self.get_response(request)
+
+        # Check if this is a write method
+        if request.method not in _WRITE_METHODS:
+            return self.get_response(request)
+
+        # Check if path is excluded
+        if self._is_excluded_path(request.path):
+            return self.get_response(request)
+
+        # Check if this node is primary
+        if self._is_primary():
+            return self.get_response(request)
+
+        # Forward write request to primary
+        return self._forward_request(request)
+
+    def _is_excluded_path(self, path: str) -> bool:
+        """Check if path is in the excluded paths list.
+
+        Args:
+            path: Request path to check
+
+        Returns:
+            True if path is excluded, False otherwise
+        """
+        return path in self._excluded_paths
+
+    def _is_primary(self) -> bool:
+        """Check if this node is the primary.
+
+        Returns:
+            True if this is the primary node, False if replica
+        """
+        if self._primary_detector is None:
+            # If no detector, assume we should forward (safer default)
+            return False
+
+        try:
+            return self._primary_detector.is_primary()
+        except Exception as e:
+            logger.warning(f"Failed to check primary status: {e}. Assuming replica.")
+            return False
+
+    def _forward_request(self, request: HttpRequest) -> HttpResponse:
+        """Forward a write request to the primary node.
+
+        Args:
+            request: Django HttpRequest to forward
+
+        Returns:
+            HttpResponse from the primary node with forwarding headers added
+        """
+        if self._forwarding_port is None or self._primary_url is None:
+            logger.error(
+                "Cannot forward: forwarding port or primary URL not configured"
+            )
+            return self.get_response(request)
+
+        # Build headers dict from Django request
+        headers = self._extract_headers(request)
+
+        # Add X-Forwarded-* headers
+        self._add_forwarded_headers(request, headers)
+
+        # Get request body
+        body = request.body if request.body else None
+
+        # Forward the request
+        try:
+            result = self._forwarding_port.forward_request(
+                primary_url=self._primary_url,
+                method=request.method,
+                path=request.path,
+                headers=headers,
+                body=body,
+                query_string=request.META.get("QUERY_STRING", ""),
+            )
+            return self._create_response(result)
+        except Exception as e:
+            logger.error(f"Failed to forward request to primary: {e}")
+            raise
+
+    def _extract_headers(self, request: HttpRequest) -> dict[str, str]:
+        """Extract HTTP headers from Django request.
+
+        Converts Django META keys (HTTP_*) to standard header names.
+
+        Args:
+            request: Django HttpRequest
+
+        Returns:
+            Dict of header name to value
+        """
+        headers: dict[str, str] = {}
+
+        for key, value in request.META.items():
+            if key.startswith("HTTP_"):
+                # Convert HTTP_HEADER_NAME to Header-Name
+                header_name = key[5:].replace("_", "-").title()
+                headers[header_name] = value
+            elif key == "CONTENT_TYPE":
+                headers["Content-Type"] = value
+            elif key == "CONTENT_LENGTH":
+                headers["Content-Length"] = value
+
+        return headers
+
+    def _add_forwarded_headers(
+        self, request: HttpRequest, headers: dict[str, str]
+    ) -> None:
+        """Add X-Forwarded-* headers for proxy chain.
+
+        Modifies headers dict in place.
+
+        Args:
+            request: Django HttpRequest
+            headers: Headers dict to modify
+        """
+        # Get client IP
+        client_ip = request.META.get("REMOTE_ADDR", "")
+
+        # Handle X-Forwarded-For (append if exists)
+        existing_xff = headers.get("X-Forwarded-For", "")
+        if existing_xff:
+            headers["X-Forwarded-For"] = f"{existing_xff}, {client_ip}"
+        else:
+            headers["X-Forwarded-For"] = client_ip
+
+        # Add X-Forwarded-Host
+        headers["X-Forwarded-Host"] = request.META.get("HTTP_HOST", "")
+
+        # Add X-Forwarded-Proto
+        scheme = "https" if request.is_secure() else "http"
+        headers["X-Forwarded-Proto"] = scheme
+
+    def _create_response(self, result: ForwardingResult) -> HttpResponse:
+        """Create Django HttpResponse from ForwardingResult.
+
+        Args:
+            result: ForwardingResult from the primary node
+
+        Returns:
+            HttpResponse with primary's response data and forwarding headers
+        """
+        response = HttpResponse(
+            content=result.body,
+            status=result.status_code,
+        )
+
+        # Copy headers from primary response
+        for header_name, header_value in result.headers.items():
+            # Skip hop-by-hop headers that shouldn't be forwarded
+            if header_name.lower() in ("connection", "keep-alive", "transfer-encoding"):
+                continue
+            response[header_name] = header_value
+
+        # Add forwarding indicator headers
+        response["X-LiteFS-Forwarded"] = "true"
+        response["X-LiteFS-Primary-Node"] = self._primary_url or ""
+
         return response
