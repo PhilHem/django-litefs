@@ -218,7 +218,7 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
         mount_path = options.get("litefs_mount_path")
 
         if not mount_path:
-            raise ValueError("litefs_mount_path must be provided in OPTIONS")
+            raise ValueError("litefs_mount_path is required in OPTIONS")
 
         # Validate mount_path using MountValidator (fail-fast) (DJANGO-027)
         mount_path_obj = Path(mount_path)
