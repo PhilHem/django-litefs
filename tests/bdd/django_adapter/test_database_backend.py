@@ -2,7 +2,11 @@
 
 Tests scenarios from tests/features/django/database_backend.feature:
 - Mount path validation (lines 23-48)
-- Split-brain protection (lines 151-176)
+- Transaction mode configuration (lines 54-67)
+- Split-brain protection (lines 99-124)
+- Cursor methods executescript() (lines 131-140)
+- WAL mode enforcement (line 146)
+- Optional split-brain detection (lines 176-192)
 """
 
 from __future__ import annotations
@@ -85,6 +89,33 @@ def test_mount_path_required_in_options():
 
 
 # ---------------------------------------------------------------------------
+# Scenarios - Transaction Mode Configuration (lines 54-67)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Django.Backend.TransactionMode")
+@scenario(
+    "../../features/django/database_backend.feature",
+    "Backend defaults to IMMEDIATE transaction mode",
+)
+def test_backend_defaults_to_immediate_transaction_mode():
+    """Test that backend defaults to IMMEDIATE transaction mode."""
+    pass
+
+
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Django.Backend.TransactionMode")
+@scenario(
+    "../../features/django/database_backend.feature",
+    "Backend rejects invalid transaction mode",
+)
+def test_backend_rejects_invalid_transaction_mode():
+    """Test that backend rejects invalid transaction mode."""
+    pass
+
+
+# ---------------------------------------------------------------------------
 # Scenarios - Split-Brain Protection (lines 147-176)
 # ---------------------------------------------------------------------------
 
@@ -134,6 +165,87 @@ def test_write_succeeds_when_split_brain_resolves():
 
 
 # ---------------------------------------------------------------------------
+# Scenarios - Cursor Methods executescript() (lines 131-140)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Django.Backend.Executescript")
+@scenario(
+    "../../features/django/database_backend.feature",
+    "executescript() checks for any write operation",
+)
+def test_executescript_checks_for_write_operation():
+    """Test that executescript() checks for any write operation."""
+    pass
+
+
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Django.Backend.Executescript")
+@scenario(
+    "../../features/django/database_backend.feature",
+    "executescript() checks split-brain before executing",
+)
+def test_executescript_checks_split_brain():
+    """Test that executescript() checks split-brain before executing."""
+    pass
+
+
+# ---------------------------------------------------------------------------
+# Scenarios - WAL Mode Enforcement (line 146)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Django.Backend.WALMode")
+@scenario(
+    "../../features/django/database_backend.feature",
+    "Backend enforces WAL journal mode",
+)
+def test_backend_enforces_wal_journal_mode():
+    """Test that backend enforces WAL journal mode."""
+    pass
+
+
+# ---------------------------------------------------------------------------
+# Scenarios - Optional Split-Brain Detection (lines 176-192)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Django.Backend.OptionalSplitBrain")
+@scenario(
+    "../../features/django/database_backend.feature",
+    "Backend works without split-brain detector configured",
+)
+def test_backend_works_without_split_brain_detector():
+    """Test that backend works without split-brain detector configured."""
+    pass
+
+
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Django.Backend.OptionalSplitBrain")
+@scenario(
+    "../../features/django/database_backend.feature",
+    "Write succeeds without split-brain detector on primary",
+)
+def test_write_succeeds_without_split_brain_detector_on_primary():
+    """Test that write succeeds without split-brain detector on primary."""
+    pass
+
+
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Django.Backend.OptionalSplitBrain")
+@scenario(
+    "../../features/django/database_backend.feature",
+    "Write fails without split-brain detector on replica",
+)
+def test_write_fails_without_split_brain_detector_on_replica():
+    """Test that write fails without split-brain detector on replica."""
+    pass
+
+
+# ---------------------------------------------------------------------------
 # Fixtures are provided by conftest.py:
 # - context: shared dict for BDD step state
 # - in_memory_connection: SQLite connection for cursor testing
@@ -156,6 +268,13 @@ def db_config_with_mount_path(context: dict, mount_path: str, tmp_path: Path):
         "OPTIONS": {
             "litefs_mount_path": mount_path,
         },
+        # Required Django settings for connection
+        "ATOMIC_REQUESTS": False,
+        "AUTOCOMMIT": True,
+        "CONN_MAX_AGE": 0,
+        "CONN_HEALTH_CHECKS": False,
+        "TIME_ZONE": None,
+        "TEST": {},
     }
 
 
@@ -182,10 +301,51 @@ def mount_path_exists_accessible(context: dict, tmp_path: Path):
 
 @given("the mount path does not exist")
 def mount_path_does_not_exist(context: dict):
-    """Ensure mount path does not exist - use a non-existent path."""
-    # The mount path from the scenario is already non-existent
-    # Just verify it's set to a path that won't exist
-    pass
+    """Ensure mount path does not exist - use a non-existent path.
+
+    Sets a flag to prevent auto-creation of temp mount path in connection step.
+    """
+    # Set flag to prevent auto-creation of temp path
+    context["expect_mount_failure"] = True
+
+
+@given("no explicit transaction mode is set")
+def no_explicit_transaction_mode(context: dict, tmp_path: Path):
+    """Ensure no explicit transaction mode is set in OPTIONS.
+
+    Also sets up a real mount path for the connection to succeed.
+    """
+    # Remove transaction_mode if present
+    options = context["settings_dict"].get("OPTIONS", {})
+    options.pop("transaction_mode", None)
+
+    # Use tmp_path as actual mount path for testing (connection needs valid path)
+    actual_mount = tmp_path / "litefs"
+    actual_mount.mkdir(parents=True, exist_ok=True)
+    context["settings_dict"]["OPTIONS"]["litefs_mount_path"] = str(actual_mount)
+    context["actual_mount_path"] = actual_mount
+
+
+@given("a database configuration with:")
+def db_config_with_table(context: dict, datatable, tmp_path: Path):
+    """Set up database configuration from a data table.
+
+    Note: datatable is a list of lists where first row is headers.
+    """
+    context["tmp_path"] = tmp_path
+    options = {}
+
+    # Parse datatable into dict (skip header row)
+    for row in datatable[1:]:
+        key = row[0]
+        value = row[1]
+        options[key] = value
+
+    context["settings_dict"] = {
+        "ENGINE": "litefs_django.db.backends.litefs",
+        "NAME": "db.sqlite3",
+        "OPTIONS": options,
+    }
 
 
 @given("the mount path exists but is not accessible")
@@ -220,9 +380,32 @@ def mount_path_not_accessible(context: dict, tmp_path: Path, monkeypatch: pytest
 
 
 @when("I create a database connection")
-def create_database_connection(context: dict):
-    """Attempt to create a database connection."""
+def create_database_connection(context: dict, tmp_path: Path):
+    """Attempt to create a database connection.
+
+    For scenarios that don't explicitly set up a valid mount path but need
+    connection to succeed (e.g., WAL mode test), we set up a temp mount path.
+    Scenarios that expect mount failure (via "mount path does not exist" step)
+    skip the auto-setup.
+    """
     settings_dict = context.get("settings_dict", {})
+
+    # If no actual_mount_path was set by a previous step and we need a valid path,
+    # set up a temp directory. This handles scenarios like WAL mode that don't
+    # have explicit "mount path exists" step but need connection to succeed.
+    # Skip if expect_mount_failure is set (e.g., "mount path does not exist" step).
+    if context.get("actual_mount_path") is None and not context.get("expect_mount_failure"):
+        # Check if the configured mount path is the test placeholder
+        options = settings_dict.get("OPTIONS", {})
+        mount_path = options.get("litefs_mount_path", "")
+        if mount_path and not Path(mount_path).exists():
+            # Use tmp_path as actual mount for scenarios needing valid connection
+            actual_mount = tmp_path / "litefs"
+            actual_mount.mkdir(parents=True, exist_ok=True)
+            settings_dict = settings_dict.copy()
+            settings_dict["OPTIONS"] = options.copy()
+            settings_dict["OPTIONS"]["litefs_mount_path"] = str(actual_mount)
+            context["actual_mount_path"] = actual_mount
 
     try:
         # Create DatabaseWrapper (validates mount path in __init__)
@@ -270,6 +453,21 @@ def mount_path_should_be_validated(context: dict):
     # The wrapper should have the mount path set
     wrapper = context["wrapper"]
     assert hasattr(wrapper, "_mount_path")
+
+
+@then(parsers.parse('the transaction mode should be "{mode}"'))
+def transaction_mode_should_be(context: dict, mode: str):
+    """Assert that the transaction mode is set correctly."""
+    assert context.get("connection_result") == "success", (
+        f"Expected connection success but got error: {context.get('error')}"
+    )
+    wrapper = context["wrapper"]
+    assert hasattr(wrapper, "_transaction_mode"), (
+        "DatabaseWrapper should have _transaction_mode attribute"
+    )
+    assert wrapper._transaction_mode == mode, (
+        f"Expected transaction mode '{mode}' but got '{wrapper._transaction_mode}'"
+    )
 
 
 @then("a configuration error should be raised")
@@ -372,6 +570,60 @@ def execute_sql(context: dict, sql: str):
 
 
 # ---------------------------------------------------------------------------
+# Then steps - WAL Mode (line 146)
+# ---------------------------------------------------------------------------
+
+
+@then(parsers.parse('the journal mode should be "{mode}"'))
+def journal_mode_should_be(context: dict, mode: str):
+    """Assert that the journal mode is set correctly.
+
+    This step verifies that the DatabaseWrapper enforces WAL mode
+    at connection time. The journal mode is set via PRAGMA journal_mode=WAL
+    in get_new_connection().
+    """
+    assert context.get("connection_result") == "success", (
+        f"Expected connection success but got error: {context.get('error')}"
+    )
+    wrapper = context["wrapper"]
+
+    # Ensure the wrapper has created a connection by calling ensure_connection
+    # This triggers get_new_connection() which sets WAL mode
+    wrapper.ensure_connection()
+
+    # Now check journal mode via the wrapper's connection
+    cursor = wrapper.connection.cursor()
+    try:
+        cursor.execute("PRAGMA journal_mode")
+        current_mode = cursor.fetchone()[0].lower()
+        assert current_mode == mode.lower(), (
+            f"Expected journal mode '{mode}' but got '{current_mode}'"
+        )
+    finally:
+        cursor.close()
+        wrapper.close()
+
+
+# ---------------------------------------------------------------------------
+# Given steps - Optional Split-Brain Detection (lines 176-192)
+# ---------------------------------------------------------------------------
+
+
+@given("no split-brain detector is configured")
+def no_split_brain_detector_configured(context: dict):
+    """Configure the test context with no split-brain detector.
+
+    This step sets a flag indicating that when creating connections
+    or cursors, no SplitBrainDetector should be provided. This tests
+    that the backend works correctly in environments where split-brain
+    detection is not needed or available.
+    """
+    context["no_split_brain_detector"] = True
+    # Also ensure cluster_state is None so execute_sql knows to skip detector
+    context["cluster_state"] = None
+
+
+# ---------------------------------------------------------------------------
 # Then steps - Error Assertions
 # ---------------------------------------------------------------------------
 
@@ -420,3 +672,50 @@ def operation_succeeds(context: dict):
     assert context["result"] == "success", (
         f"Expected success but got {context['error_type']}: {context.get('error')}"
     )
+
+
+# ---------------------------------------------------------------------------
+# When steps - executescript() Execution
+# ---------------------------------------------------------------------------
+
+
+@when(parsers.parse('I call executescript with "{sql}"'))
+def call_executescript(context: dict, sql: str):
+    """Execute SQL script through LiteFSCursor.executescript()."""
+    # Create fake detectors
+    is_primary = context.get("is_primary", True)
+    primary_detector = FakePrimaryDetector(is_primary=is_primary)
+
+    # Create split-brain detector with configured cluster state
+    cluster_state = context.get("cluster_state")
+    if cluster_state is not None:
+        fake_port = FakeSplitBrainDetector(cluster_state=cluster_state)
+        split_brain_detector = SplitBrainDetector(port=fake_port)
+    else:
+        split_brain_detector = None
+
+    # Create cursor with detectors
+    cursor = LiteFSCursor(
+        context["connection"],
+        primary_detector=primary_detector,
+        split_brain_detector=split_brain_detector,
+    )
+
+    # Execute and capture result or exception
+    try:
+        cursor.executescript(sql)
+        context["result"] = "success"
+        context["error"] = None
+        context["error_type"] = None
+    except SplitBrainError as e:
+        context["result"] = "failure"
+        context["error"] = e
+        context["error_type"] = "SplitBrainError"
+    except NotPrimaryError as e:
+        context["result"] = "failure"
+        context["error"] = e
+        context["error_type"] = "NotPrimaryError"
+    except Exception as e:
+        context["result"] = "failure"
+        context["error"] = e
+        context["error_type"] = type(e).__name__

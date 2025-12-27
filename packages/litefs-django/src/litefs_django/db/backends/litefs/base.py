@@ -213,8 +213,19 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
                 injection. If not provided, a new SplitBrainDetector is created.
                 Use this for testing with FakeSplitBrainDetector.
         """
-        # Extract LiteFS mount path from OPTIONS
+        # Extract OPTIONS for configuration validation
         options = settings_dict.get("OPTIONS", {})
+
+        # Validate transaction_mode early (before mount path validation)
+        transaction_mode = options.get("transaction_mode", "IMMEDIATE")
+        valid_modes = {"DEFERRED", "IMMEDIATE", "EXCLUSIVE"}
+        if transaction_mode not in valid_modes:
+            raise ValueError(
+                f"Invalid transaction_mode '{transaction_mode}'. "
+                f"Must be one of: {', '.join(sorted(valid_modes))}"
+            )
+
+        # Extract LiteFS mount path from OPTIONS
         mount_path = options.get("litefs_mount_path")
 
         if not mount_path:
@@ -251,8 +262,8 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
             # For now, we'll defer creation to allow flexibility in port resolution
             self._split_brain_detector = None
 
-        # Extract transaction mode from OPTIONS (default: IMMEDIATE)
-        self._transaction_mode = options.get("transaction_mode", "IMMEDIATE")
+        # Store validated transaction mode
+        self._transaction_mode = transaction_mode
 
     def get_connection_params(self):
         """Get connection params without litefs_mount_path.
