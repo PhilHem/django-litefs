@@ -5,11 +5,15 @@ This adapter uses httpx to forward HTTP requests from replicas to the primary no
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from urllib.parse import urljoin, urlparse
 
 import httpx
 
 from litefs.adapters.ports import ForwardingPort, ForwardingResult
+
+if TYPE_CHECKING:
+    from litefs.domain.settings import ForwardingSettings
 
 
 class HTTPXForwardingAdapter:
@@ -24,17 +28,24 @@ class HTTPXForwardingAdapter:
 
     def __init__(
         self,
-        timeout: float = 30.0,
+        connect_timeout: float = 5.0,
+        read_timeout: float = 30.0,
         client: httpx.Client | None = None,
     ) -> None:
         """Initialize the HTTPX forwarding adapter.
 
         Args:
-            timeout: Request timeout in seconds. Defaults to 30.0.
+            connect_timeout: Connection timeout in seconds. Defaults to 5.0.
+            read_timeout: Read timeout in seconds. Defaults to 30.0.
             client: Optional httpx.Client for dependency injection (testing).
                    If not provided, a new client is created per request.
         """
-        self._timeout = timeout
+        self._timeout = httpx.Timeout(
+            connect=connect_timeout,
+            read=read_timeout,
+            write=read_timeout,  # Use read_timeout for write as well
+            pool=connect_timeout,  # Use connect_timeout for pool acquisition
+        )
         self._client = client
 
     def forward_request(
@@ -134,6 +145,27 @@ class HTTPXForwardingAdapter:
             status_code=response.status_code,
             headers=response_headers,
             body=response.content,
+        )
+
+    @classmethod
+    def from_forwarding_settings(
+        cls,
+        settings: "ForwardingSettings",
+        client: httpx.Client | None = None,
+    ) -> "HTTPXForwardingAdapter":
+        """Create an adapter from ForwardingSettings.
+
+        Args:
+            settings: ForwardingSettings containing timeout configuration.
+            client: Optional httpx.Client for dependency injection.
+
+        Returns:
+            Configured HTTPXForwardingAdapter instance.
+        """
+        return cls(
+            connect_timeout=settings.connect_timeout,
+            read_timeout=settings.read_timeout,
+            client=client,
         )
 
 

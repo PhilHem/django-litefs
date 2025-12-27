@@ -314,6 +314,8 @@ class TestHTTPXForwardingAdapter:
 
     def test_forward_request_uses_configured_timeout(self) -> None:
         """Test that forward_request uses configured timeout."""
+        import httpx
+
         mock_client = MagicMock()
         mock_response = Mock()
         mock_response.status_code = 200
@@ -321,7 +323,9 @@ class TestHTTPXForwardingAdapter:
         mock_response.content = b""
         mock_client.request.return_value = mock_response
 
-        adapter = HTTPXForwardingAdapter(timeout=60.0, client=mock_client)
+        adapter = HTTPXForwardingAdapter(
+            connect_timeout=10.0, read_timeout=60.0, client=mock_client
+        )
         adapter.forward_request(
             primary_url="http://primary:8080",
             method="GET",
@@ -331,4 +335,23 @@ class TestHTTPXForwardingAdapter:
 
         mock_client.request.assert_called_once()
         call_kwargs = mock_client.request.call_args
-        assert call_kwargs.kwargs["timeout"] == 60.0
+        timeout = call_kwargs.kwargs["timeout"]
+        assert isinstance(timeout, httpx.Timeout)
+        assert timeout.connect == 10.0
+        assert timeout.read == 60.0
+
+    def test_from_forwarding_settings_factory(self) -> None:
+        """Test that factory method creates adapter from ForwardingSettings."""
+        from litefs.domain.settings import ForwardingSettings
+
+        settings = ForwardingSettings(
+            enabled=True,
+            primary_url="primary.local:8000",
+            connect_timeout=15.0,
+            read_timeout=45.0,
+        )
+
+        adapter = HTTPXForwardingAdapter.from_forwarding_settings(settings)
+
+        assert adapter._timeout.connect == 15.0
+        assert adapter._timeout.read == 45.0

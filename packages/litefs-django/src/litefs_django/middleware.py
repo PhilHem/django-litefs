@@ -40,6 +40,8 @@ from django.http import HttpResponse, HttpRequest
 from django.conf import settings as django_settings
 
 from litefs.usecases.split_brain_detector import SplitBrainDetector
+from litefs.usecases.path_exclusion_matcher import PathExclusionMatcher
+from litefs.usecases.primary_url_resolver import PrimaryURLResolver
 from litefs.adapters.ports import (
     SplitBrainDetectorPort,
     ForwardingPort,
@@ -232,6 +234,8 @@ class WriteForwardingMiddleware:
         self._primary_url: str | None = None
         self._forwarding_enabled: bool = False
         self._excluded_paths: tuple[str, ...] = ()
+        self._path_matcher: PathExclusionMatcher | None = None
+        self._url_resolver: PrimaryURLResolver | None = None
 
         # Try to initialize from settings
         self._initialize_forwarding()
@@ -244,6 +248,7 @@ class WriteForwardingMiddleware:
         """
         try:
             from litefs_django.settings import get_litefs_settings
+            from litefs.adapters.httpx_forwarding import HTTPXForwardingAdapter
 
             litefs_config = getattr(django_settings, "LITEFS", None)
             if not litefs_config:
@@ -262,23 +267,40 @@ class WriteForwardingMiddleware:
                 logger.debug("Write forwarding not enabled in settings.")
                 return
 
-            if not litefs_settings.forwarding.primary_url:
-                logger.warning(
-                    "Write forwarding enabled but PRIMARY_URL not set. Forwarding disabled."
-                )
-                return
+            forwarding = litefs_settings.forwarding
 
-            self._primary_url = litefs_settings.forwarding.primary_url
-            self._excluded_paths = litefs_settings.forwarding.excluded_paths
+            # Store for backwards compatibility
+            self._primary_url = forwarding.primary_url
+            self._excluded_paths = forwarding.excluded_paths
             self._forwarding_enabled = True
+
+            # Create path exclusion matcher
+            self._path_matcher = PathExclusionMatcher.from_forwarding_settings(
+                forwarding
+            )
 
             # Create primary detector
             from litefs.usecases.primary_detector import PrimaryDetector
 
             self._primary_detector = PrimaryDetector(litefs_settings.mount_path)
 
+            # Create URL resolver (supports both static and Raft modes)
+            self._url_resolver = PrimaryURLResolver(
+                forwarding=forwarding,
+                primary_url_detector=self._primary_detector,
+                scheme=forwarding.scheme,
+            )
+
+            # Create forwarding adapter with timeout configuration
+            self._forwarding_port = HTTPXForwardingAdapter.from_forwarding_settings(
+                forwarding
+            )
+
             logger.debug(
-                f"WriteForwardingMiddleware initialized. Primary URL: {self._primary_url}"
+                f"WriteForwardingMiddleware initialized. "
+                f"Primary URL: {self._primary_url}, "
+                f"Connect timeout: {forwarding.connect_timeout}s, "
+                f"Read timeout: {forwarding.read_timeout}s"
             )
 
         except Exception as e:
@@ -324,7 +346,10 @@ class WriteForwardingMiddleware:
         return self._forward_request(request)
 
     def _is_excluded_path(self, path: str) -> bool:
-        """Check if path is in the excluded paths list.
+        """Check if path matches any exclusion pattern.
+
+        Uses PathExclusionMatcher for glob and regex pattern matching.
+        Falls back to simple string matching if matcher not initialized.
 
         Args:
             path: Request path to check
@@ -332,6 +357,10 @@ class WriteForwardingMiddleware:
         Returns:
             True if path is excluded, False otherwise
         """
+        if self._path_matcher is not None:
+            return self._path_matcher.is_excluded(path)
+
+        # Fallback for backwards compatibility or test injection
         return path in self._excluded_paths
 
     def _is_primary(self) -> bool:
@@ -359,11 +388,19 @@ class WriteForwardingMiddleware:
         Returns:
             HttpResponse from the primary node with forwarding headers added
         """
-        if self._forwarding_port is None or self._primary_url is None:
-            logger.error(
-                "Cannot forward: forwarding port or primary URL not configured"
-            )
+        if self._forwarding_port is None:
+            logger.error("Cannot forward: forwarding port not configured")
             return self.get_response(request)
+
+        # Resolve the primary URL using PrimaryURLResolver or fallback
+        primary_url = self._resolve_primary_url()
+        if primary_url is None:
+            logger.error("Cannot forward: primary URL could not be resolved")
+            return HttpResponse(
+                "Service Unavailable: primary node unknown",
+                status=503,
+                content_type="text/plain",
+            )
 
         # Build headers dict from Django request
         headers = self._extract_headers(request)
@@ -377,17 +414,38 @@ class WriteForwardingMiddleware:
         # Forward the request
         try:
             result = self._forwarding_port.forward_request(
-                primary_url=self._primary_url,
+                primary_url=primary_url,
                 method=request.method,
                 path=request.path,
                 headers=headers,
                 body=body,
                 query_string=request.META.get("QUERY_STRING", ""),
             )
-            return self._create_response(result)
+            return self._create_response(result, primary_url)
         except Exception as e:
             logger.error(f"Failed to forward request to primary: {e}")
             raise
+
+    def _resolve_primary_url(self) -> str | None:
+        """Resolve the primary node's full URL.
+
+        Uses PrimaryURLResolver if available, otherwise falls back to
+        the static _primary_url for backwards compatibility.
+
+        Returns:
+            Full URL with scheme or None if no primary available.
+        """
+        if self._url_resolver is not None:
+            return self._url_resolver.resolve()
+
+        # Fallback for backwards compatibility or test injection
+        if self._primary_url:
+            # Ensure URL has scheme
+            if not self._primary_url.startswith(("http://", "https://")):
+                return f"http://{self._primary_url}"
+            return self._primary_url
+
+        return None
 
     def _extract_headers(self, request: HttpRequest) -> dict[str, str]:
         """Extract HTTP headers from Django request.
@@ -442,11 +500,14 @@ class WriteForwardingMiddleware:
         scheme = "https" if request.is_secure() else "http"
         headers["X-Forwarded-Proto"] = scheme
 
-    def _create_response(self, result: ForwardingResult) -> HttpResponse:
+    def _create_response(
+        self, result: ForwardingResult, primary_url: str | None = None
+    ) -> HttpResponse:
         """Create Django HttpResponse from ForwardingResult.
 
         Args:
             result: ForwardingResult from the primary node
+            primary_url: The primary URL that was used for forwarding
 
         Returns:
             HttpResponse with primary's response data and forwarding headers
@@ -465,6 +526,6 @@ class WriteForwardingMiddleware:
 
         # Add forwarding indicator headers
         response["X-LiteFS-Forwarded"] = "true"
-        response["X-LiteFS-Primary-Node"] = self._primary_url or ""
+        response["X-LiteFS-Primary-Node"] = primary_url or self._primary_url or ""
 
         return response
