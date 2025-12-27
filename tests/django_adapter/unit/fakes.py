@@ -6,7 +6,14 @@ These in-memory fakes replace real implementations that require I/O
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from litefs.domain.split_brain import RaftClusterState, RaftNodeState
+from litefs.usecases.primary_detector import LiteFSNotRunningError
+
+if TYPE_CHECKING:
+    from litefs.domain.health import HealthStatus
+    from litefs.usecases.failover_coordinator import NodeState
 
 
 class FakePrimaryDetector:
@@ -72,6 +79,20 @@ class FakePrimaryDetector:
             error: Exception to raise, or None to clear.
         """
         self._error = error
+
+    def set_litefs_not_running(self) -> None:
+        """Simulate LiteFS not running on the node.
+
+        After calling this method, is_primary() will raise LiteFSNotRunningError.
+        This enables testing the scenario 'Given LiteFS is not running on the node'.
+
+        Example:
+            def test_litefs_not_running(fake_primary_detector):
+                fake_primary_detector.set_litefs_not_running()
+                with pytest.raises(LiteFSNotRunningError):
+                    fake_primary_detector.is_primary()
+        """
+        self._error = LiteFSNotRunningError("LiteFS is not running on this node")
 
 
 class FakeSplitBrainDetector:
@@ -149,3 +170,167 @@ class FakeSplitBrainDetector:
             error: Exception to raise, or None to clear.
         """
         self._error = error
+
+
+class FakeHealthChecker:
+    """In-memory fake for HealthChecker use case - no dependencies.
+
+    Use this instead of mocking HealthChecker in unit tests for:
+    - Faster test execution (no dependency chain)
+    - Cleaner test code (no mock.patch boilerplate)
+    - Stateful testing (toggle health status during test)
+
+    Mirrors the HealthChecker.check_health() interface.
+
+    Example:
+        def test_unhealthy_node(fake_health_checker):
+            fake_health_checker.set_health_status("unhealthy")
+            status = fake_health_checker.check_health()
+            assert status.state == "unhealthy"
+    """
+
+    def __init__(self, *, health_status: str = "healthy") -> None:
+        """Initialize with desired health state.
+
+        Args:
+            health_status: Initial health status. One of "healthy", "degraded",
+                or "unhealthy". Defaults to "healthy".
+        """
+        from litefs.domain.health import HealthStatus
+
+        self._health_status = HealthStatus(state=health_status)  # type: ignore[arg-type]
+
+    def check_health(self) -> "HealthStatus":
+        """Return configured health status.
+
+        Returns:
+            HealthStatus value object with configured state.
+        """
+        return self._health_status
+
+    def set_health_status(self, status: str) -> None:
+        """Set health status for testing.
+
+        Args:
+            status: New health status. One of "healthy", "degraded", or "unhealthy".
+        """
+        from litefs.domain.health import HealthStatus
+
+        self._health_status = HealthStatus(state=status)  # type: ignore[arg-type]
+
+
+class FakeFailoverCoordinator:
+    """In-memory fake for FailoverCoordinator use case - no dependencies.
+
+    Use this instead of mocking FailoverCoordinator in unit tests for:
+    - Faster test execution (no dependency chain)
+    - Cleaner test code (no mock.patch boilerplate)
+    - Stateful testing (toggle node state during test)
+
+    Mirrors the FailoverCoordinator interface.
+
+    Example:
+        def test_replica_state(fake_failover_coordinator):
+            fake_failover_coordinator.set_node_state(NodeState.REPLICA)
+            assert fake_failover_coordinator.state == NodeState.REPLICA
+    """
+
+    def __init__(self, *, node_state: "NodeState | None" = None) -> None:
+        """Initialize with desired node state.
+
+        Args:
+            node_state: Initial node state. Defaults to NodeState.PRIMARY.
+        """
+        from litefs.usecases.failover_coordinator import NodeState
+
+        self._node_state = node_state if node_state is not None else NodeState.PRIMARY
+        self._healthy = True
+        self._can_become_leader = True
+        self._can_maintain_leadership = True
+
+    @property
+    def state(self) -> "NodeState":
+        """Get the current state of this node.
+
+        Returns:
+            NodeState.PRIMARY or NodeState.REPLICA.
+        """
+        return self._node_state
+
+    def set_node_state(self, state: "NodeState") -> None:
+        """Set node state for testing.
+
+        Args:
+            state: New node state (NodeState.PRIMARY or NodeState.REPLICA).
+        """
+        self._node_state = state
+
+    def coordinate_transition(self) -> None:
+        """No-op in fake. State is controlled via set_node_state()."""
+        pass
+
+    def can_become_leader(self) -> bool:
+        """Check if this node can become the leader.
+
+        Returns:
+            Configured value (default True).
+        """
+        return self._can_become_leader and self._healthy
+
+    def set_can_become_leader(self, value: bool) -> None:
+        """Set can_become_leader return value for testing.
+
+        Args:
+            value: Value to return from can_become_leader().
+        """
+        self._can_become_leader = value
+
+    def can_maintain_leadership(self) -> bool:
+        """Check if this node can maintain leadership.
+
+        Returns:
+            Configured value (default True).
+        """
+        return self._can_maintain_leadership and self._healthy
+
+    def set_can_maintain_leadership(self, value: bool) -> None:
+        """Set can_maintain_leadership return value for testing.
+
+        Args:
+            value: Value to return from can_maintain_leadership().
+        """
+        self._can_maintain_leadership = value
+
+    def is_healthy(self) -> bool:
+        """Check if this node is healthy.
+
+        Returns:
+            True if healthy, False if unhealthy.
+        """
+        return self._healthy
+
+    def mark_healthy(self) -> None:
+        """Mark this node as healthy."""
+        self._healthy = True
+
+    def mark_unhealthy(self) -> None:
+        """Mark this node as unhealthy."""
+        self._healthy = False
+
+    def perform_graceful_handoff(self) -> None:
+        """Perform graceful handoff - transitions to REPLICA."""
+        from litefs.usecases.failover_coordinator import NodeState
+
+        self._node_state = NodeState.REPLICA
+
+    def demote_for_health(self) -> None:
+        """Demote for health - transitions to REPLICA."""
+        from litefs.usecases.failover_coordinator import NodeState
+
+        self._node_state = NodeState.REPLICA
+
+    def demote_for_quorum_loss(self) -> None:
+        """Demote for quorum loss - transitions to REPLICA."""
+        from litefs.usecases.failover_coordinator import NodeState
+
+        self._node_state = NodeState.REPLICA

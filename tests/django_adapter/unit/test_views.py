@@ -13,7 +13,7 @@ from django.test import RequestFactory
 from litefs.domain.health import HealthStatus, LivenessResult, ReadinessResult
 from litefs.usecases.liveness_checker import LivenessChecker
 from litefs.usecases.readiness_checker import ReadinessChecker
-from litefs_django.views import liveness_view, readiness_view
+from litefs_django.views import health_check_view, liveness_view, readiness_view
 
 if TYPE_CHECKING:
     pass
@@ -279,3 +279,157 @@ class TestReadinessView:
 
         # Should return 405 Method Not Allowed
         assert response.status_code == 405
+
+
+@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
+class TestHealthCheckViewIsReady:
+    """Test health_check_view is_ready field."""
+
+    @pytest.fixture
+    def request_factory(self) -> RequestFactory:
+        """Create Django request factory."""
+        return RequestFactory()
+
+    def test_health_check_view_includes_is_ready_true_when_healthy(
+        self, request_factory: RequestFactory
+    ) -> None:
+        """Test that health_check_view includes is_ready: true when health_status is healthy."""
+        request = request_factory.get("/health/")
+
+        mock_detector = Mock()
+        mock_detector.is_primary.return_value = True
+
+        mock_health_checker = Mock()
+        mock_health_checker.check_health.return_value = HealthStatus(state="healthy")
+
+        mock_coordinator = Mock()
+        mock_coordinator.state.value = "primary"
+
+        with (
+            patch("litefs_django.views.get_primary_detector", return_value=mock_detector),
+            patch("litefs_django.views.get_health_checker", return_value=mock_health_checker),
+            patch("litefs_django.views.get_failover_coordinator", return_value=mock_coordinator),
+        ):
+            response = health_check_view(request)
+
+        data = json.loads(response.content)
+        assert "is_ready" in data
+        assert data["is_ready"] is True
+
+    def test_health_check_view_includes_is_ready_false_when_unhealthy(
+        self, request_factory: RequestFactory
+    ) -> None:
+        """Test that health_check_view includes is_ready: false when health_status is unhealthy."""
+        request = request_factory.get("/health/")
+
+        mock_detector = Mock()
+        mock_detector.is_primary.return_value = False
+
+        mock_health_checker = Mock()
+        mock_health_checker.check_health.return_value = HealthStatus(state="unhealthy")
+
+        mock_coordinator = Mock()
+        mock_coordinator.state.value = "replica"
+
+        with (
+            patch("litefs_django.views.get_primary_detector", return_value=mock_detector),
+            patch("litefs_django.views.get_health_checker", return_value=mock_health_checker),
+            patch("litefs_django.views.get_failover_coordinator", return_value=mock_coordinator),
+        ):
+            response = health_check_view(request)
+
+        data = json.loads(response.content)
+        assert "is_ready" in data
+        assert data["is_ready"] is False
+
+    def test_health_check_view_includes_is_ready_false_when_degraded(
+        self, request_factory: RequestFactory
+    ) -> None:
+        """Test that health_check_view includes is_ready: false when health_status is degraded."""
+        request = request_factory.get("/health/")
+
+        mock_detector = Mock()
+        mock_detector.is_primary.return_value = True
+
+        mock_health_checker = Mock()
+        mock_health_checker.check_health.return_value = HealthStatus(state="degraded")
+
+        mock_coordinator = Mock()
+        mock_coordinator.state.value = "primary"
+
+        with (
+            patch("litefs_django.views.get_primary_detector", return_value=mock_detector),
+            patch("litefs_django.views.get_health_checker", return_value=mock_health_checker),
+            patch("litefs_django.views.get_failover_coordinator", return_value=mock_coordinator),
+        ):
+            response = health_check_view(request)
+
+        data = json.loads(response.content)
+        assert "is_ready" in data
+        assert data["is_ready"] is False
+
+
+@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
+class TestHealthCheckViewNodeState:
+    """Test health_check_view node_state field at top level."""
+
+    @pytest.fixture
+    def request_factory(self) -> RequestFactory:
+        """Create Django request factory."""
+        return RequestFactory()
+
+    def test_health_check_view_includes_node_state_at_top_level_primary(
+        self, request_factory: RequestFactory
+    ) -> None:
+        """Test that health_check_view includes node_state at top level when PRIMARY."""
+        request = request_factory.get("/health/")
+
+        mock_detector = Mock()
+        mock_detector.is_primary.return_value = True
+
+        mock_health_checker = Mock()
+        mock_health_checker.check_health.return_value = HealthStatus(state="healthy")
+
+        mock_coordinator = Mock()
+        mock_coordinator.state.value = "primary"
+
+        with (
+            patch("litefs_django.views.get_primary_detector", return_value=mock_detector),
+            patch("litefs_django.views.get_health_checker", return_value=mock_health_checker),
+            patch("litefs_django.views.get_failover_coordinator", return_value=mock_coordinator),
+        ):
+            response = health_check_view(request)
+
+        data = json.loads(response.content)
+        assert "node_state" in data
+        assert data["node_state"] == "PRIMARY"
+
+    def test_health_check_view_includes_node_state_at_top_level_replica(
+        self, request_factory: RequestFactory
+    ) -> None:
+        """Test that health_check_view includes node_state at top level when REPLICA."""
+        request = request_factory.get("/health/")
+
+        mock_detector = Mock()
+        mock_detector.is_primary.return_value = False
+
+        mock_health_checker = Mock()
+        mock_health_checker.check_health.return_value = HealthStatus(state="healthy")
+
+        mock_coordinator = Mock()
+        mock_coordinator.state.value = "replica"
+
+        with (
+            patch("litefs_django.views.get_primary_detector", return_value=mock_detector),
+            patch("litefs_django.views.get_health_checker", return_value=mock_health_checker),
+            patch("litefs_django.views.get_failover_coordinator", return_value=mock_coordinator),
+        ):
+            response = health_check_view(request)
+
+        data = json.loads(response.content)
+        assert "node_state" in data
+        assert data["node_state"] == "REPLICA"

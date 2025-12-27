@@ -152,22 +152,41 @@ def health_check_view(request: HttpRequest) -> JsonResponse:
         # Check primary status
         try:
             is_primary = detector.is_primary()
-        except LiteFSNotRunningError:
+        except LiteFSNotRunningError as e:
             logger.warning("LiteFS not running, marking as unhealthy")
-            is_primary = False
+            # Return 503 with error details when LiteFS is not running
+            return JsonResponse(
+                {
+                    "error": str(e),
+                    "health_status": "unhealthy",
+                    "is_primary": False,
+                    "is_ready": False,
+                },
+                status=503,
+            )
 
         # Check health status
         health_status = health_checker.check_health()
 
         # Get node state from coordinator
-        node_state = coordinator.state.value  # NodeState enum value (primary/replica)
+        node_state_raw = (
+            coordinator.state.value
+        )  # NodeState enum value (primary/replica)
+        node_state_upper = (
+            node_state_raw.upper()
+        )  # Normalize to PRIMARY/REPLICA for top-level
 
-        # Build response
+        # Derive is_ready from health_status
+        is_ready = health_status.state == "healthy"
+
+        # Build response with node_state at top level (uppercase) and in cluster (lowercase for backward compat)
         response_data = {
             "is_primary": is_primary,
             "health_status": health_status.state,
+            "node_state": node_state_upper,
+            "is_ready": is_ready,
             "cluster": {
-                "node_state": node_state,
+                "node_state": node_state_raw,
             },
         }
 
@@ -181,6 +200,7 @@ def health_check_view(request: HttpRequest) -> JsonResponse:
                 "error": str(e),
                 "health_status": "unhealthy",
                 "is_primary": False,
+                "is_ready": False,
             },
             status=503,
         )
