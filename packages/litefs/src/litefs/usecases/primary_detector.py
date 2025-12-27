@@ -39,6 +39,15 @@ class PrimaryDetector:
 
         return self.primary_file.exists()
 
+    def is_litefs_running(self) -> bool:
+        """Check if LiteFS is running by verifying mount path exists.
+
+        Returns:
+            True if mount path directory exists, False otherwise
+        """
+        return self.mount_path.exists()
+
+
 
 
 

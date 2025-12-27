@@ -5,7 +5,7 @@ from hypothesis import given, strategies as st
 from unittest.mock import patch
 
 from litefs.domain.settings import LiteFSSettings, StaticLeaderConfig, LiteFSConfigError
-from litefs_django.settings import get_litefs_settings
+from litefs_django.settings import get_litefs_settings, is_dev_mode
 
 
 @pytest.mark.tier(1)
@@ -645,3 +645,35 @@ class TestStaticLeaderConfigParsing:
         }
         with pytest.raises(LiteFSConfigError):
             get_litefs_settings(django_settings)
+
+
+@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
+class TestIsDevMode:
+    """Test is_dev_mode helper function."""
+
+    def test_is_dev_mode_returns_true_when_litefs_dict_missing(self):
+        """Test that is_dev_mode returns True when LITEFS dict is missing entirely."""
+        django_settings = None
+        assert is_dev_mode(django_settings) is True
+
+    def test_is_dev_mode_returns_true_when_enabled_false(self):
+        """Test that is_dev_mode returns True when LITEFS.enabled is False."""
+        django_settings = {"ENABLED": False}
+        assert is_dev_mode(django_settings) is True
+
+    def test_is_dev_mode_returns_false_when_enabled_true(self):
+        """Test that is_dev_mode returns False when LITEFS.enabled is True."""
+        django_settings = {"ENABLED": True}
+        assert is_dev_mode(django_settings) is False
+
+    def test_is_dev_mode_returns_false_when_enabled_not_specified(self):
+        """Test that is_dev_mode returns False when ENABLED key is not specified but dict exists."""
+        django_settings = {"MOUNT_PATH": "/litefs"}
+        assert is_dev_mode(django_settings) is False
+
+    def test_is_dev_mode_with_empty_dict_returns_false(self):
+        """Test that is_dev_mode returns False when LITEFS dict exists but is empty."""
+        django_settings = {}
+        assert is_dev_mode(django_settings) is False

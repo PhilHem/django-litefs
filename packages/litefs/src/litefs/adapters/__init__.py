@@ -7,8 +7,11 @@ from litefs.adapters.ports import (
     LeaderElectionPort,
     RaftLeaderElectionPort,
     SplitBrainDetectorPort,
+    ForwardingPort,
+    ForwardingResult,
 )
 from litefs.adapters.raft_leader_election_adapter import RaftLeaderElectionAdapter
+from litefs.adapters.httpx_forwarding import HTTPXForwardingAdapter
 
 __all__ = [
     "PrimaryDetectorPort",
@@ -18,7 +21,11 @@ __all__ = [
     "RaftLeaderElectionPort",
     "RaftLeaderElectionAdapter",
     "SplitBrainDetectorPort",
+    "ForwardingPort",
+    "ForwardingResult",
+    "HTTPXForwardingAdapter",
 ]
+
 
 
 

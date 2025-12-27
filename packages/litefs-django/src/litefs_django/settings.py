@@ -108,3 +108,26 @@ def get_litefs_settings(django_settings: dict[str, Any]) -> LiteFSSettings:
 
     # Create domain object (validation happens in __post_init__)
     return LiteFSSettings(**kwargs)
+
+
+def is_dev_mode(django_settings: dict[str, Any] | None) -> bool:
+    """Check if LiteFS is in dev mode (disabled).
+
+    Dev mode is active when:
+    - LITEFS settings dict is missing entirely (None)
+    - LITEFS.ENABLED is explicitly set to False
+
+    Production mode is active when:
+    - LITEFS dict exists and ENABLED is True or not specified
+
+    Args:
+        django_settings: Django LITEFS settings dict, or None if not configured
+
+    Returns:
+        True if in dev mode (LiteFS disabled), False if in production mode
+    """
+    if django_settings is None:
+        return True
+    # If ENABLED key exists and is False, we're in dev mode
+    # If ENABLED key doesn't exist or is True, we're in production mode
+    return django_settings.get("ENABLED", True) is False

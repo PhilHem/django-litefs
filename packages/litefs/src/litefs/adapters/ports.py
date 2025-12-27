@@ -7,11 +7,29 @@ These are Protocol classes (structural subtyping) for flexible testing.
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from litefs.domain.events import FailoverEvent
     from litefs.domain.split_brain import RaftClusterState
+
+
+@dataclass(frozen=True)
+class ForwardingResult:
+    """Result of forwarding a request to the primary node.
+
+    Immutable value object containing the response from the primary.
+
+    Attributes:
+        status_code: HTTP status code from the primary's response.
+        headers: Response headers from the primary.
+        body: Response body bytes from the primary.
+    """
+
+    status_code: int
+    headers: dict[str, str]
+    body: bytes
 
 
 @runtime_checkable
@@ -285,3 +303,46 @@ class EnvironmentNodeIDResolver:
             raise ValueError("node ID cannot be empty or whitespace-only")
 
         return node_id_stripped
+
+
+@runtime_checkable
+class ForwardingPort(Protocol):
+    """Port interface for forwarding HTTP requests to the primary node.
+
+    Implementations handle the actual HTTP request forwarding when a replica
+    receives a write request that needs to go to the primary. This abstracts
+    the HTTP client from the forwarding logic.
+
+    Contract:
+        - forward_request() sends request to primary and returns response
+        - All headers except Host should be preserved
+        - X-Forwarded-* headers should be added
+        - May raise exceptions for network errors
+    """
+
+    def forward_request(
+        self,
+        primary_url: str,
+        method: str,
+        path: str,
+        headers: dict[str, str],
+        body: bytes | None = None,
+        query_string: str = "",
+    ) -> ForwardingResult:
+        """Forward an HTTP request to the primary node.
+
+        Args:
+            primary_url: Base URL of the primary node (e.g., "http://primary:8080").
+            method: HTTP method (GET, POST, PUT, DELETE, etc.).
+            path: Request path (e.g., "/api/users").
+            headers: Original request headers. Host will be rewritten.
+            body: Optional request body bytes.
+            query_string: Optional query string (without leading ?).
+
+        Returns:
+            ForwardingResult containing status code, headers, and body from primary.
+
+        Raises:
+            May raise httpx.RequestError or similar for network failures.
+        """
+        ...
