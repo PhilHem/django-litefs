@@ -19,6 +19,7 @@ class TestForwardingSettings:
         assert fwd.timeout_seconds == 30.0
         assert fwd.retry_count == 1
         assert fwd.excluded_paths == ()
+        assert fwd.scheme == "http"
 
     def test_create_with_all_fields(self) -> None:
         """Test creating config with all fields specified."""
@@ -28,12 +29,14 @@ class TestForwardingSettings:
             timeout_seconds=60.0,
             retry_count=3,
             excluded_paths=("/health", "/metrics"),
+            scheme="https",
         )
         assert fwd.enabled is True
         assert fwd.primary_url == "http://primary:8080"
         assert fwd.timeout_seconds == 60.0
         assert fwd.retry_count == 3
         assert fwd.excluded_paths == ("/health", "/metrics")
+        assert fwd.scheme == "https"
 
     def test_frozen_dataclass(self) -> None:
         """Test that ForwardingSettings is immutable."""
@@ -95,6 +98,8 @@ class TestForwardingSettings:
         assert fwd.retry_count == 1
         # Spec: excluded_paths (tuple[str, ...], default ())
         assert fwd.excluded_paths == ()
+        # Spec: scheme (str, default "http")
+        assert fwd.scheme == "http"
 
     def test_write_forwarding_enabled_scenario(self) -> None:
         """Test write forwarding configuration scenario."""
@@ -104,3 +109,25 @@ class TestForwardingSettings:
         )
         assert fwd.enabled is True
         assert fwd.primary_url == "http://primary-node:8080"
+
+    def test_scheme_field_defaults_to_http(self) -> None:
+        """Test that scheme field defaults to 'http'."""
+        fwd = ForwardingSettings()
+        assert fwd.scheme == "http"
+
+    def test_scheme_field_can_be_set_to_https(self) -> None:
+        """Test that scheme field can be set to 'https'."""
+        fwd = ForwardingSettings(scheme="https")
+        assert fwd.scheme == "https"
+
+    def test_scheme_field_included_in_equality(self) -> None:
+        """Test that scheme field is included in equality comparison."""
+        fwd1 = ForwardingSettings(scheme="http")
+        fwd2 = ForwardingSettings(scheme="https")
+        assert fwd1 != fwd2
+
+    def test_scheme_field_included_in_hash(self) -> None:
+        """Test that scheme field is included in hash calculation."""
+        fwd1 = ForwardingSettings(scheme="http")
+        fwd2 = ForwardingSettings(scheme="https")
+        assert hash(fwd1) != hash(fwd2)

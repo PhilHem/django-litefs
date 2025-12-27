@@ -98,6 +98,8 @@ class ForwardingSettings:
                     Defaults to 1.
         excluded_paths: URL paths to exclude from forwarding (e.g., health checks).
                        Uses tuple for immutability. Defaults to empty tuple.
+        scheme: HTTP scheme to use for forwarding (e.g., "http", "https").
+                Defaults to "http".
     """
 
     enabled: bool = False
@@ -105,6 +107,7 @@ class ForwardingSettings:
     timeout_seconds: float = 30.0
     retry_count: int = 1
     excluded_paths: tuple[str, ...] = ()
+    scheme: str = "http"
 
 
 @dataclass(frozen=True)
