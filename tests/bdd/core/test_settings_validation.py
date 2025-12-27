@@ -12,7 +12,7 @@ from litefs.domain.exceptions import LiteFSConfigError
 # ---------------------------------------------------------------------------
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Domain.Invariant")
+@pytest.mark.tra("Domain.Invariant.PathValidation")
 @scenario(
     "../../features/core/settings_validation.feature",
     "Paths must be absolute",
@@ -22,7 +22,7 @@ def test_paths_must_be_absolute():
 
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Domain.Invariant")
+@pytest.mark.tra("Domain.Invariant.PathTraversal")
 @scenario(
     "../../features/core/settings_validation.feature",
     "Path traversal attacks are rejected in mount_path",
@@ -32,7 +32,7 @@ def test_path_traversal_mount_path():
 
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Domain.Invariant")
+@pytest.mark.tra("Domain.Invariant.PathTraversal")
 @scenario(
     "../../features/core/settings_validation.feature",
     "Path traversal attacks are rejected in data_path",
@@ -42,7 +42,7 @@ def test_path_traversal_data_path():
 
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Domain.Invariant")
+@pytest.mark.tra("Domain.Invariant.DatabaseNameValidation")
 @scenario(
     "../../features/core/settings_validation.feature",
     "Database name cannot be empty",
@@ -52,7 +52,7 @@ def test_database_name_empty():
 
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Domain.Invariant")
+@pytest.mark.tra("Domain.Invariant.DatabaseNameValidation")
 @scenario(
     "../../features/core/settings_validation.feature",
     "Database name cannot be whitespace only",
@@ -62,7 +62,7 @@ def test_database_name_whitespace():
 
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Domain.Invariant")
+@pytest.mark.tra("Domain.Invariant.LeaderElectionValidation")
 @scenario(
     "../../features/core/settings_validation.feature",
     "Leader election must be 'static' or 'raft'",
@@ -72,7 +72,7 @@ def test_leader_election_invalid():
 
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Domain.Invariant")
+@pytest.mark.tra("Domain.Invariant.LeaderElectionValidation")
 @scenario(
     "../../features/core/settings_validation.feature",
     "Static leader election is valid",
@@ -82,7 +82,7 @@ def test_static_election_valid():
 
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Domain.Invariant")
+@pytest.mark.tra("Domain.Invariant.LeaderElectionValidation")
 @scenario(
     "../../features/core/settings_validation.feature",
     "Raft leader election is valid with proper config",
@@ -92,7 +92,7 @@ def test_raft_election_valid():
 
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Domain.Invariant")
+@pytest.mark.tra("Domain.Invariant.RaftConfiguration")
 @scenario(
     "../../features/core/settings_validation.feature",
     "Raft mode requires raft_self_addr",
@@ -102,7 +102,7 @@ def test_raft_requires_self_addr():
 
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Domain.Invariant")
+@pytest.mark.tra("Domain.Invariant.RaftConfiguration")
 @scenario(
     "../../features/core/settings_validation.feature",
     "Raft mode requires non-empty raft_self_addr",
@@ -112,7 +112,7 @@ def test_raft_requires_nonempty_self_addr():
 
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Domain.Invariant")
+@pytest.mark.tra("Domain.Invariant.RaftConfiguration")
 @scenario(
     "../../features/core/settings_validation.feature",
     "Raft mode requires raft_peers",
@@ -122,7 +122,7 @@ def test_raft_requires_peers():
 
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Domain.Invariant")
+@pytest.mark.tra("Domain.Invariant.RaftConfiguration")
 @scenario(
     "../../features/core/settings_validation.feature",
     "Raft mode rejects empty peers list",
@@ -132,7 +132,7 @@ def test_raft_rejects_empty_peers():
 
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Domain.Invariant")
+@pytest.mark.tra("Domain.Invariant.LeaderElectionValidation")
 @scenario(
     "../../features/core/settings_validation.feature",
     "Static mode ignores raft fields even if invalid",
