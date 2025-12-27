@@ -12,24 +12,19 @@ Tests verify:
 from __future__ import annotations
 
 import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Generator
 
 import pytest
 
-# Import ClusterFixture from parent conftest
-# We need to add parent directory to path for import
-conftest_path = Path(__file__).parent.parent / "conftest.py"
-sys.path.insert(0, str(conftest_path.parent))
-
+# ClusterFixture is imported from parent conftest.py via pytest's conftest inheritance
 if TYPE_CHECKING:
-    from conftest import ClusterFixture  # type: ignore[import-not-found] # noqa: F401
+    from tests.core.integration.conftest import ClusterFixture
 
 
 @pytest.fixture
-def three_node_cluster(tmp_path: Path) -> Generator:  # type: ignore[type-arg]
+def three_node_cluster(tmp_path: Path) -> Generator["ClusterFixture", None, None]:
     """Provide a 3-node ClusterFixture for integration tests.
 
     Creates and starts a 3-node cluster for testing leader election,
@@ -41,7 +36,8 @@ def three_node_cluster(tmp_path: Path) -> Generator:  # type: ignore[type-arg]
     Yields:
         Initialized and started ClusterFixture instance with 3 nodes.
     """
-    from conftest import ClusterFixture  # noqa: F401,E402
+    # Import at runtime from parent conftest (pytest makes it available)
+    from tests.core.integration.conftest import ClusterFixture
 
     fixture = ClusterFixture(
         cluster_name="test-cluster-3node",
@@ -61,9 +57,7 @@ class TestMultiNodeClusterSetup:
 
     @pytest.mark.integration
     @pytest.mark.no_parallel
-    def test_three_node_cluster_initialization(
-        self, three_node_cluster: Any
-    ) -> None:
+    def test_three_node_cluster_initialization(self, three_node_cluster: Any) -> None:
         """Test that a 3-node cluster initializes with correct structure.
 
         Verifies:
@@ -89,9 +83,7 @@ class TestMultiNodeClusterSetup:
 
     @pytest.mark.integration
     @pytest.mark.no_parallel
-    def test_docker_compose_file_valid_yaml(
-        self, three_node_cluster: Any
-    ) -> None:
+    def test_docker_compose_file_valid_yaml(self, three_node_cluster: Any) -> None:
         """Test that generated docker-compose.yml is valid YAML and syntax-correct.
 
         Verifies that docker-compose can parse the generated file without errors.
@@ -102,7 +94,8 @@ class TestMultiNodeClusterSetup:
 
         # Validate with docker-compose config command
         try:
-            result = subprocess.run(["docker-compose", "--file", str(compose_file), "config"],
+            result = subprocess.run(
+                ["docker-compose", "--file", str(compose_file), "config"],
                 capture_output=True,
                 timeout=10,
                 text=True,
@@ -115,9 +108,7 @@ class TestMultiNodeClusterSetup:
 
     @pytest.mark.integration
     @pytest.mark.no_parallel
-    def test_cluster_services_structure(
-        self, three_node_cluster: Any
-    ) -> None:
+    def test_cluster_services_structure(self, three_node_cluster: Any) -> None:
         """Test that docker-compose services have required structure.
 
         Verifies each node service has:
@@ -228,12 +219,14 @@ class TestFailoverScenarios:
                     "--project-name",
                     three_node_cluster.cluster_name,
                     "--file",
-                    str(
-                        Path(three_node_cluster.base_dir) / "docker-compose.yml"
-                    ),
+                    str(Path(three_node_cluster.base_dir) / "docker-compose.yml"),
                     "stop",
                     "node-1",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
             assert result.returncode == 0, f"Failed to stop node: {result.stderr}"
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
@@ -243,14 +236,13 @@ class TestFailoverScenarios:
 
         # Cluster should still have 2 running nodes
         try:
-            result = subprocess.run([
+            result = subprocess.run(
+                [
                     "docker-compose",
                     "--project-name",
                     three_node_cluster.cluster_name,
                     "--file",
-                    str(
-                        Path(three_node_cluster.base_dir) / "docker-compose.yml"
-                    ),
+                    str(Path(three_node_cluster.base_dir) / "docker-compose.yml"),
                     "ps",
                 ],
                 capture_output=True,
@@ -288,26 +280,31 @@ class TestFailoverScenarios:
                     "--project-name",
                     three_node_cluster.cluster_name,
                     "--file",
-                    str(
-                        Path(three_node_cluster.base_dir) / "docker-compose.yml"
-                    ),
+                    str(Path(three_node_cluster.base_dir) / "docker-compose.yml"),
                     "stop",
                     "node-1",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
             assert result.returncode == 0
 
             # Restart node-1
-            result = subprocess.run([
+            result = subprocess.run(
+                [
                     "docker-compose",
                     "--project-name",
                     three_node_cluster.cluster_name,
                     "--file",
-                    str(
-                        Path(three_node_cluster.base_dir) / "docker-compose.yml"
-                    ),
+                    str(Path(three_node_cluster.base_dir) / "docker-compose.yml"),
                     "start",
                     "node-1",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
             assert result.returncode == 0, f"Failed to start node: {result.stderr}"
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
@@ -317,14 +314,13 @@ class TestFailoverScenarios:
 
         # Cluster should have all 3 nodes running again
         try:
-            result = subprocess.run([
+            result = subprocess.run(
+                [
                     "docker-compose",
                     "--project-name",
                     three_node_cluster.cluster_name,
                     "--file",
-                    str(
-                        Path(three_node_cluster.base_dir) / "docker-compose.yml"
-                    ),
+                    str(Path(three_node_cluster.base_dir) / "docker-compose.yml"),
                     "ps",
                 ],
                 capture_output=True,
@@ -332,7 +328,9 @@ class TestFailoverScenarios:
                 text=True,
             )
             running = result.stdout.count("Up")
-            assert running == 3, f"Expected 3 running nodes after restart, got {running}"
+            assert running == 3, (
+                f"Expected 3 running nodes after restart, got {running}"
+            )
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
 
@@ -360,11 +358,13 @@ class TestFailoverScenarios:
                     "--project-name",
                     three_node_cluster.cluster_name,
                     "--file",
-                    str(
-                        Path(three_node_cluster.base_dir) / "docker-compose.yml"
-                    ),
+                    str(Path(three_node_cluster.base_dir) / "docker-compose.yml"),
                     "stop",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
             assert result.returncode == 0
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
@@ -373,14 +373,13 @@ class TestFailoverScenarios:
 
         # Verify no nodes running
         try:
-            result = subprocess.run([
+            result = subprocess.run(
+                [
                     "docker-compose",
                     "--project-name",
                     three_node_cluster.cluster_name,
                     "--file",
-                    str(
-                        Path(three_node_cluster.base_dir) / "docker-compose.yml"
-                    ),
+                    str(Path(three_node_cluster.base_dir) / "docker-compose.yml"),
                     "ps",
                 ],
                 capture_output=True,
@@ -440,12 +439,14 @@ class TestHealthMonitoring:
                     "--project-name",
                     three_node_cluster.cluster_name,
                     "--file",
-                    str(
-                        Path(three_node_cluster.base_dir) / "docker-compose.yml"
-                    ),
+                    str(Path(three_node_cluster.base_dir) / "docker-compose.yml"),
                     "stop",
                     "node-2",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
             assert result.returncode == 0
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
@@ -458,17 +459,20 @@ class TestHealthMonitoring:
 
         # Restart node and verify health returns
         try:
-            result = subprocess.run([
+            result = subprocess.run(
+                [
                     "docker-compose",
                     "--project-name",
                     three_node_cluster.cluster_name,
                     "--file",
-                    str(
-                        Path(three_node_cluster.base_dir) / "docker-compose.yml"
-                    ),
+                    str(Path(three_node_cluster.base_dir) / "docker-compose.yml"),
                     "start",
                     "node-2",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
             assert result.returncode == 0
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
@@ -500,11 +504,13 @@ class TestHealthMonitoring:
                     "--project-name",
                     three_node_cluster.cluster_name,
                     "--file",
-                    str(
-                        Path(three_node_cluster.base_dir) / "docker-compose.yml"
-                    ),
+                    str(Path(three_node_cluster.base_dir) / "docker-compose.yml"),
                     "stop",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
             assert result.returncode == 0
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
@@ -539,12 +545,14 @@ class TestHealthMonitoring:
                     "--project-name",
                     three_node_cluster.cluster_name,
                     "--file",
-                    str(
-                        Path(three_node_cluster.base_dir) / "docker-compose.yml"
-                    ),
+                    str(Path(three_node_cluster.base_dir) / "docker-compose.yml"),
                     "stop",
                     "node-1",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
 
@@ -562,12 +570,14 @@ class TestHealthMonitoring:
                     "--project-name",
                     three_node_cluster.cluster_name,
                     "--file",
-                    str(
-                        Path(three_node_cluster.base_dir) / "docker-compose.yml"
-                    ),
+                    str(Path(three_node_cluster.base_dir) / "docker-compose.yml"),
                     "start",
                     "node-1",
-                ], capture_output=True, timeout=10, text=True)
+                ],
+                capture_output=True,
+                timeout=10,
+                text=True,
+            )
         except FileNotFoundError:
             pytest.skip("docker-compose CLI not available")
 

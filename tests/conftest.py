@@ -37,14 +37,16 @@ if TYPE_CHECKING:
 # ============================================================================
 
 # Valid TRA namespace prefixes
-VALID_TRA_PREFIXES = frozenset([
-    "Domain.Invariant.",
-    "Domain.Policy.",
-    "UseCase.",
-    "Port.",
-    "Adapter.",
-    "Contract.",
-])
+VALID_TRA_PREFIXES = frozenset(
+    [
+        "Domain.Invariant.",
+        "Domain.Policy.",
+        "UseCase.",
+        "Port.",
+        "Adapter.",
+        "Contract.",
+    ]
+)
 
 
 # ============================================================================
@@ -53,11 +55,11 @@ VALID_TRA_PREFIXES = frozenset([
 
 # Tier timeout limits in seconds
 TIER_TIMEOUTS: dict[int, float] = {
-    0: 0.1,    # 100ms - instant
-    1: 2.0,    # 2s - fast (pre-commit)
-    2: 30.0,   # 30s - standard (CI)
+    0: 0.1,  # 100ms - instant
+    1: 2.0,  # 2s - fast (pre-commit)
+    2: 30.0,  # 30s - standard (CI)
     3: 300.0,  # 5min - slow (merge to main)
-    4: 0,      # No limit - manual
+    4: 0,  # No limit - manual
 }
 
 # Tier names for error messages
@@ -80,16 +82,35 @@ def pytest_configure(config: Config) -> None:
     config.addinivalue_line(
         "markers",
         "tra(anchor): Test Responsibility Anchor - declares the single responsibility this test protects. "
-        "Must start with one of: Domain.Invariant, Domain.Policy, UseCase, Port, Adapter, Contract"
+        "Must start with one of: Domain.Invariant, Domain.Policy, UseCase, Port, Adapter, Contract",
     )
     config.addinivalue_line(
         "markers",
         "tier(level): Test tier (0=instant, 1=fast, 2=standard, 3=slow, 4=manual). "
-        "Determines when test runs and enforces timeout."
+        "Determines when test runs and enforces timeout.",
     )
     config.addinivalue_line(
         "markers",
-        "legacy: Marks test as legacy (no TRA yet). Must be migrated, never add new ones."
+        "legacy: Marks test as legacy (no TRA yet). Must be migrated, never add new ones.",
+    )
+    # DEPRECATED markers - kept for backwards compatibility during migration
+    config.addinivalue_line(
+        "markers",
+        "unit: DEPRECATED - use tier(1) instead. Unit tests (fast, no LiteFS process)",
+    )
+    config.addinivalue_line(
+        "markers",
+        "integration: DEPRECATED - use tier(3) instead. Integration tests (requires Docker + FUSE)",
+    )
+    config.addinivalue_line(
+        "markers", "property: Property-based tests using Hypothesis"
+    )
+    config.addinivalue_line(
+        "markers", "concurrency: DEPRECATED - use tier(2) instead. Concurrency tests"
+    )
+    config.addinivalue_line(
+        "markers",
+        "no_parallel: Tests that cannot run in parallel (shared state/filesystem)",
     )
 
 
@@ -124,9 +145,7 @@ def _enforce_tra_markers(items: list[Item]) -> list[str]:
 
         # Rule: Cannot have both @tra and @legacy
         if tra_markers and legacy_markers:
-            errors.append(
-                f"{test_id}: Cannot have both @tra and @legacy markers"
-            )
+            errors.append(f"{test_id}: Cannot have both @tra and @legacy markers")
             continue
 
         # Rule: Must have exactly one of @tra or @legacy
@@ -148,18 +167,14 @@ def _enforce_tra_markers(items: list[Item]) -> list[str]:
 
             # Rule: @tra must have an argument
             if not marker.args:
-                errors.append(
-                    f"{test_id}: @tra marker missing anchor argument"
-                )
+                errors.append(f"{test_id}: @tra marker missing anchor argument")
                 continue
 
             anchor = marker.args[0]
 
             # Rule: Anchor must be a non-empty string
             if not isinstance(anchor, str) or not anchor.strip():
-                errors.append(
-                    f"{test_id}: @tra anchor must be a non-empty string"
-                )
+                errors.append(f"{test_id}: @tra anchor must be a non-empty string")
                 continue
 
             # Rule: Anchor must follow canonical namespace
@@ -271,7 +286,9 @@ def pytest_collection_modifyitems(config: Config, items: list[Item]) -> None:
                 print(f"  {error}")
         else:
             # Strict mode (enforce='1' or unset): fail collection
-            error_msg = "TRA/Tier Enforcement Errors:\n" + "\n".join(f"  - {e}" for e in all_errors)
+            error_msg = "TRA/Tier Enforcement Errors:\n" + "\n".join(
+                f"  - {e}" for e in all_errors
+            )
             pytest.fail(error_msg, pytrace=False)
 
     # Apply tier-based timeouts
@@ -321,7 +338,9 @@ def pytest_report_header(config: Config) -> str:
     return f"TRA enforcement: {tra_enforce} | Tier enforcement: {tier_enforce}"
 
 
-def pytest_terminal_summary(terminalreporter: object, exitstatus: int, config: Config) -> None:
+def pytest_terminal_summary(
+    terminalreporter: object, exitstatus: int, config: Config
+) -> None:
     """Print enforcement summary at end of test run."""
     stats = EnforcementStats()
 
