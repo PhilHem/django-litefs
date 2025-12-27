@@ -3,7 +3,12 @@
 from typing import Any
 
 from litefs.domain.exceptions import LiteFSConfigError
-from litefs.domain.settings import LiteFSSettings, StaticLeaderConfig, ProxySettings
+from litefs.domain.settings import (
+    LiteFSSettings,
+    StaticLeaderConfig,
+    ProxySettings,
+    ForwardingSettings,
+)
 
 # Required fields that must be present in Django settings
 _REQUIRED_FIELDS = (
@@ -105,6 +110,23 @@ def get_litefs_settings(django_settings: dict[str, Any]) -> LiteFSSettings:
     else:
         # proxy is None if not provided
         kwargs["proxy"] = None
+
+    # Parse forwarding configuration if provided
+    if "FORWARDING" in django_settings:
+        fwd_dict = django_settings["FORWARDING"]
+        # Convert EXCLUDED_PATHS list to tuple for immutability
+        excluded_paths = tuple(fwd_dict.get("EXCLUDED_PATHS", []))
+        kwargs["forwarding"] = ForwardingSettings(
+            enabled=fwd_dict.get("ENABLED", False),
+            primary_url=fwd_dict.get("PRIMARY_URL"),
+            timeout_seconds=fwd_dict.get("TIMEOUT_SECONDS", 30.0),
+            retry_count=fwd_dict.get("RETRY_COUNT", 1),
+            excluded_paths=excluded_paths,
+            scheme=fwd_dict.get("SCHEME", "http"),
+        )
+    else:
+        # forwarding is None if not provided
+        kwargs["forwarding"] = None
 
     # Create domain object (validation happens in __post_init__)
     return LiteFSSettings(**kwargs)

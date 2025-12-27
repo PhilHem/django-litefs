@@ -4,7 +4,7 @@ import pytest
 from hypothesis import given, strategies as st
 from unittest.mock import patch
 
-from litefs.domain.settings import LiteFSSettings, StaticLeaderConfig, LiteFSConfigError
+from litefs.domain.settings import LiteFSSettings, StaticLeaderConfig, ForwardingSettings, LiteFSConfigError
 from litefs_django.settings import get_litefs_settings, is_dev_mode
 
 
@@ -677,3 +677,96 @@ class TestIsDevMode:
         """Test that is_dev_mode returns False when LITEFS dict exists but is empty."""
         django_settings = {}
         assert is_dev_mode(django_settings) is False
+
+
+@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
+class TestForwardingConfigParsing:
+    """Test parsing of FORWARDING configuration from Django settings."""
+
+    def _base_settings(self) -> dict:
+        """Return minimal valid Django settings dict."""
+        return {
+            "MOUNT_PATH": "/litefs",
+            "DATA_PATH": "/var/lib/litefs",
+            "DATABASE_NAME": "db.sqlite3",
+            "LEADER_ELECTION": "static",
+            "PROXY_ADDR": ":8080",
+            "ENABLED": True,
+            "RETENTION": "1h",
+            "PRIMARY_HOSTNAME": "node1",
+        }
+
+    def test_parse_forwarding_config_with_all_fields(self) -> None:
+        """Test parsing FORWARDING config with all fields specified."""
+        django_settings = self._base_settings()
+        django_settings["FORWARDING"] = {
+            "ENABLED": True,
+            "PRIMARY_URL": "http://primary.example.com:8080",
+            "TIMEOUT_SECONDS": 60.0,
+            "RETRY_COUNT": 3,
+            "EXCLUDED_PATHS": ["/health", "/ready", "/metrics"],
+            "SCHEME": "https",
+        }
+        settings = get_litefs_settings(django_settings)
+
+        assert settings.forwarding is not None
+        assert isinstance(settings.forwarding, ForwardingSettings)
+        assert settings.forwarding.enabled is True
+        assert settings.forwarding.primary_url == "http://primary.example.com:8080"
+        assert settings.forwarding.timeout_seconds == 60.0
+        assert settings.forwarding.retry_count == 3
+        assert settings.forwarding.excluded_paths == ("/health", "/ready", "/metrics")
+        assert settings.forwarding.scheme == "https"
+
+    def test_parse_forwarding_config_with_required_fields_only(self) -> None:
+        """Test parsing FORWARDING config with only ENABLED field."""
+        django_settings = self._base_settings()
+        django_settings["FORWARDING"] = {
+            "ENABLED": True,
+            "PRIMARY_URL": "http://primary:8080",
+        }
+        settings = get_litefs_settings(django_settings)
+
+        assert settings.forwarding is not None
+        assert settings.forwarding.enabled is True
+        assert settings.forwarding.primary_url == "http://primary:8080"
+        # Defaults
+        assert settings.forwarding.timeout_seconds == 30.0
+        assert settings.forwarding.retry_count == 1
+        assert settings.forwarding.excluded_paths == ()
+        assert settings.forwarding.scheme == "http"
+
+    def test_parse_forwarding_config_defaults(self) -> None:
+        """Test that ForwardingSettings defaults are applied when keys not provided."""
+        django_settings = self._base_settings()
+        django_settings["FORWARDING"] = {}
+        settings = get_litefs_settings(django_settings)
+
+        assert settings.forwarding is not None
+        assert settings.forwarding.enabled is False
+        assert settings.forwarding.primary_url is None
+        assert settings.forwarding.timeout_seconds == 30.0
+        assert settings.forwarding.retry_count == 1
+        assert settings.forwarding.excluded_paths == ()
+        assert settings.forwarding.scheme == "http"
+
+    def test_parse_forwarding_config_excluded_paths_list_to_tuple(self) -> None:
+        """Test that EXCLUDED_PATHS list is converted to tuple."""
+        django_settings = self._base_settings()
+        django_settings["FORWARDING"] = {
+            "EXCLUDED_PATHS": ["/a", "/b"],
+        }
+        settings = get_litefs_settings(django_settings)
+
+        assert settings.forwarding is not None
+        assert settings.forwarding.excluded_paths == ("/a", "/b")
+        assert isinstance(settings.forwarding.excluded_paths, tuple)
+
+    def test_parse_without_forwarding_config(self) -> None:
+        """Test parsing without FORWARDING key (backward compat)."""
+        django_settings = self._base_settings()
+        settings = get_litefs_settings(django_settings)
+
+        assert settings.forwarding is None
