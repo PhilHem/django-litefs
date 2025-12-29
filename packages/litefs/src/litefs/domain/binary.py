@@ -183,3 +183,19 @@ class BinaryMetadata:
         """Validate checksum is not empty if provided."""
         if self.checksum is not None and not self.checksum:
             raise LiteFSConfigError("checksum cannot be empty if provided")
+
+
+@dataclass(frozen=True)
+class BinaryResolutionResult:
+    """Result of binary resolution process.
+
+    Immutable value object containing the result of resolving a LiteFS binary,
+    including the detected platform and the resolved path (if found).
+
+    Attributes:
+        platform: The detected platform (os and arch).
+        resolved_path: Path to the resolved binary, or None if not found.
+    """
+
+    platform: Platform
+    resolved_path: Path | None
