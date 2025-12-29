@@ -9,9 +9,15 @@ from litefs.adapters.ports import (
     SplitBrainDetectorPort,
     ForwardingPort,
     ForwardingResult,
+    PlatformDetectorPort,
+    BinaryDownloaderPort,
+    BinaryResolverPort,
 )
 from litefs.adapters.raft_leader_election_adapter import RaftLeaderElectionAdapter
 from litefs.adapters.httpx_forwarding import HTTPXForwardingAdapter
+from litefs.adapters.platform_detector import OsPlatformDetector
+from litefs.adapters.httpx_binary_downloader import HttpxBinaryDownloader
+from litefs.adapters.filesystem_binary_resolver import FilesystemBinaryResolver
 
 __all__ = [
     "PrimaryDetectorPort",
@@ -24,6 +30,12 @@ __all__ = [
     "ForwardingPort",
     "ForwardingResult",
     "HTTPXForwardingAdapter",
+    "PlatformDetectorPort",
+    "OsPlatformDetector",
+    "BinaryDownloaderPort",
+    "HttpxBinaryDownloader",
+    "BinaryResolverPort",
+    "FilesystemBinaryResolver",
 ]
 
 
