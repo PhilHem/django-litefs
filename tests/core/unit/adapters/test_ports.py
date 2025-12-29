@@ -1,6 +1,9 @@
 """Unit tests for port interfaces and default implementations."""
 
 import os
+from datetime import datetime, timezone
+from pathlib import Path
+
 import pytest
 from hypothesis import given, strategies as st, settings
 
@@ -13,6 +16,15 @@ from litefs.adapters.ports import (
     LoggingPort,
     TimeProvider,
     RealTimeProvider,
+    BinaryDownloaderPort,
+    PlatformDetectorPort,
+    BinaryResolverPort,
+)
+from litefs.domain.binary import (
+    BinaryMetadata,
+    BinaryVersion,
+    BinaryLocation,
+    Platform,
 )
 from litefs.domain.split_brain import RaftClusterState, RaftNodeState
 
@@ -779,3 +791,183 @@ class TestRealTimeProvider:
         first = provider.get_time_seconds()
         second = provider.get_time_seconds()
         assert second >= first
+
+
+@pytest.mark.tier(1)
+@pytest.mark.tra("Port.BinaryDownloaderPort")
+class TestBinaryDownloaderPort:
+    """Test BinaryDownloaderPort protocol interface."""
+
+    def test_protocol_has_download_method(self) -> None:
+        """Test that BinaryDownloaderPort has download method."""
+        assert hasattr(BinaryDownloaderPort, "download")
+
+    def test_protocol_is_runtime_checkable(self) -> None:
+        """Test that BinaryDownloaderPort is runtime_checkable."""
+
+        class FakeDownloader:
+            def download(self, url: str, destination: Path) -> BinaryMetadata:
+                return BinaryMetadata(
+                    platform=Platform(os="linux", arch="amd64"),
+                    version=BinaryVersion(major=0, minor=8, patch=0),
+                    location=BinaryLocation(path=destination, is_custom=False),
+                )
+
+        fake = FakeDownloader()
+        # If runtime_checkable works, isinstance should return True
+        assert isinstance(fake, BinaryDownloaderPort)
+
+    def test_mock_implementation_satisfies_protocol(self) -> None:
+        """Test that a mock implementation satisfies the protocol."""
+
+        class MockDownloader:
+            def download(self, url: str, destination: Path) -> BinaryMetadata:
+                return BinaryMetadata(
+                    platform=Platform(os="darwin", arch="arm64"),
+                    version=BinaryVersion(major=1, minor=0, patch=0),
+                    location=BinaryLocation(path=destination, is_custom=False),
+                    checksum="abc123",
+                    size_bytes=1024,
+                    downloaded_at=datetime.now(timezone.utc),
+                )
+
+        mock = MockDownloader()
+        assert isinstance(mock, BinaryDownloaderPort)
+        result = mock.download("http://example.com/litefs", Path("/tmp/litefs"))
+        assert isinstance(result, BinaryMetadata)
+
+    def test_contract_download_returns_binary_metadata(self) -> None:
+        """Test that download() returns BinaryMetadata with correct fields."""
+
+        class TestDownloader:
+            def download(self, url: str, destination: Path) -> BinaryMetadata:
+                return BinaryMetadata(
+                    platform=Platform(os="linux", arch="arm64"),
+                    version=BinaryVersion(major=0, minor=8, patch=2),
+                    location=BinaryLocation(path=destination, is_custom=False),
+                    checksum="sha256:abc123def456",
+                    size_bytes=5242880,
+                    downloaded_at=datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
+                )
+
+        downloader = TestDownloader()
+        dest = Path("/usr/local/bin/litefs")
+        result = downloader.download("https://github.com/superfly/litefs/releases", dest)
+
+        assert isinstance(result, BinaryMetadata)
+        assert result.platform.os == "linux"
+        assert result.platform.arch == "arm64"
+        assert result.version.major == 0
+        assert result.version.minor == 8
+        assert result.version.patch == 2
+        assert result.location.path == dest
+        assert result.location.is_custom is False
+        assert result.checksum == "sha256:abc123def456"
+        assert result.size_bytes == 5242880
+        assert result.downloaded_at is not None
+
+
+@pytest.mark.tier(1)
+@pytest.mark.tra("Port.PlatformDetectorPort")
+class TestPlatformDetectorPort:
+    """Test PlatformDetectorPort protocol interface."""
+
+    def test_protocol_has_detect_method(self) -> None:
+        """Test that PlatformDetectorPort has detect method."""
+        assert hasattr(PlatformDetectorPort, "detect")
+
+    def test_protocol_is_runtime_checkable(self) -> None:
+        """Test that PlatformDetectorPort is runtime_checkable."""
+
+        class FakeDetector:
+            def detect(self) -> Platform:
+                return Platform(os="linux", arch="amd64")
+
+        fake = FakeDetector()
+        # If runtime_checkable works, isinstance should return True
+        assert isinstance(fake, PlatformDetectorPort)
+
+    def test_mock_implementation_satisfies_protocol(self) -> None:
+        """Test that a mock implementation satisfies the protocol."""
+
+        class MockDetector:
+            def detect(self) -> Platform:
+                return Platform(os="darwin", arch="arm64")
+
+        mock = MockDetector()
+        assert isinstance(mock, PlatformDetectorPort)
+        result = mock.detect()
+        assert isinstance(result, Platform)
+
+    def test_contract_detect_returns_platform(self) -> None:
+        """Test that detect() returns Platform with correct fields."""
+
+        class TestDetector:
+            def detect(self) -> Platform:
+                return Platform(os="linux", arch="arm64")
+
+        detector = TestDetector()
+        result = detector.detect()
+
+        assert isinstance(result, Platform)
+        assert result.os == "linux"
+        assert result.arch == "arm64"
+
+
+@pytest.mark.tier(1)
+@pytest.mark.tra("Port.BinaryResolverPort")
+class TestBinaryResolverPort:
+    """Test BinaryResolverPort protocol interface."""
+
+    def test_protocol_has_resolve_method(self) -> None:
+        """Test that BinaryResolverPort has resolve method."""
+        assert hasattr(BinaryResolverPort, "resolve")
+
+    def test_protocol_is_runtime_checkable(self) -> None:
+        """Test that BinaryResolverPort is runtime_checkable."""
+
+        class FakeResolver:
+            def resolve(self) -> BinaryLocation | None:
+                return BinaryLocation(path=Path("/usr/bin/litefs"), is_custom=False)
+
+        fake = FakeResolver()
+        # If runtime_checkable works, isinstance should return True
+        assert isinstance(fake, BinaryResolverPort)
+
+    def test_mock_implementation_satisfies_protocol(self) -> None:
+        """Test that a mock implementation satisfies the protocol."""
+
+        class MockResolver:
+            def resolve(self) -> BinaryLocation | None:
+                return BinaryLocation(path=Path("/opt/litefs/bin/litefs"), is_custom=True)
+
+        mock = MockResolver()
+        assert isinstance(mock, BinaryResolverPort)
+        result = mock.resolve()
+        assert isinstance(result, BinaryLocation)
+
+    def test_contract_resolve_returns_binary_location_or_none(self) -> None:
+        """Test that resolve() returns BinaryLocation with correct fields."""
+
+        class TestResolver:
+            def resolve(self) -> BinaryLocation | None:
+                return BinaryLocation(path=Path("/usr/local/bin/litefs"), is_custom=False)
+
+        resolver = TestResolver()
+        result = resolver.resolve()
+
+        assert isinstance(result, BinaryLocation)
+        assert result.path == Path("/usr/local/bin/litefs")
+        assert result.is_custom is False
+
+    def test_resolve_returns_none_when_binary_not_found(self) -> None:
+        """Test that resolve() returns None when binary is not found."""
+
+        class NotFoundResolver:
+            def resolve(self) -> BinaryLocation | None:
+                return None
+
+        resolver = NotFoundResolver()
+        assert isinstance(resolver, BinaryResolverPort)
+        result = resolver.resolve()
+        assert result is None

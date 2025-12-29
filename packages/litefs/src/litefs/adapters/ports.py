@@ -9,9 +9,11 @@ from __future__ import annotations
 import os
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from litefs.domain.binary import BinaryLocation, BinaryMetadata, Platform
     from litefs.domain.events import FailoverEvent
     from litefs.domain.split_brain import RaftClusterState
 
@@ -388,3 +390,91 @@ class RealTimeProvider:
             Current system time as Unix timestamp (seconds since epoch).
         """
         return time.time()
+
+
+@runtime_checkable
+class BinaryDownloaderPort(Protocol):
+    """Port interface for downloading LiteFS binary from remote URL.
+
+    Implementations handle downloading the LiteFS binary from a remote URL
+    to a local filesystem path. This abstracts the HTTP download mechanism
+    from the binary management use cases.
+
+    Contract:
+        - download(url, destination) downloads binary and returns metadata
+        - The destination path's parent directory must exist
+        - Returns BinaryMetadata with populated download info
+        - May raise exceptions for network errors or filesystem errors
+    """
+
+    def download(self, url: str, destination: Path) -> BinaryMetadata:
+        """Download binary from URL to local filesystem.
+
+        Args:
+            url: Remote URL to download the binary from.
+            destination: Local filesystem path to save the binary to.
+                The parent directory must exist.
+
+        Returns:
+            BinaryMetadata containing platform, version, location, and
+            optional fields like checksum, size_bytes, and downloaded_at.
+
+        Raises:
+            May raise httpx.RequestError or similar for network failures.
+            May raise OSError for filesystem errors.
+        """
+        ...
+
+
+@runtime_checkable
+class PlatformDetectorPort(Protocol):
+    """Port interface for detecting current OS and architecture.
+
+    Implementations detect the current platform (operating system and CPU
+    architecture) where the code is running. This enables downloading the
+    correct LiteFS binary for the current system.
+
+    Contract:
+        - detect() returns a Platform value object with os and arch
+        - The returned Platform must have valid os ('linux' or 'darwin')
+        - The returned Platform must have valid arch ('amd64' or 'arm64')
+        - Implementations should return consistent results across multiple calls
+    """
+
+    def detect(self) -> Platform:
+        """Detect the current platform.
+
+        Returns:
+            Platform value object containing:
+            - os: Operating system ('linux' or 'darwin')
+            - arch: Architecture ('amd64' or 'arm64')
+        """
+        ...
+
+
+@runtime_checkable
+class BinaryResolverPort(Protocol):
+    """Port interface for resolving/finding existing LiteFS binary on filesystem.
+
+    Implementations search for an existing LiteFS binary on the filesystem,
+    checking known locations (system paths, user directories, etc.) to find
+    where the binary is installed.
+
+    Contract:
+        - resolve() returns BinaryLocation if binary found, None if not found
+        - The returned BinaryLocation.path must point to an existing file
+        - The returned BinaryLocation.is_custom indicates if user-specified
+        - Implementations may check multiple locations in priority order
+        - Should not download or install the binary - only find existing ones
+    """
+
+    def resolve(self) -> BinaryLocation | None:
+        """Resolve/find an existing LiteFS binary on the filesystem.
+
+        Returns:
+            BinaryLocation if the binary is found, containing:
+            - path: Path to the binary location
+            - is_custom: True if user-specified, False if default location
+            None if the binary is not found on the filesystem.
+        """
+        ...
