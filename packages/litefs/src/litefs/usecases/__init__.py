@@ -12,6 +12,11 @@ from litefs.usecases.readiness_checker import ReadinessChecker
 from litefs.usecases.primary_url_detector import PrimaryURLDetector
 from litefs.usecases.primary_url_resolver import PrimaryURLResolver
 from litefs.usecases.path_exclusion_matcher import PathExclusionMatcher
+from litefs.usecases.installation_checker import (
+    InstallationChecker,
+    InstallationCheckResult,
+    InstallationStatus,
+)
 
 __all__ = [
     "CachedPrimaryDetector",
@@ -27,6 +32,9 @@ __all__ = [
     "PrimaryURLDetector",
     "PrimaryURLResolver",
     "PathExclusionMatcher",
+    "InstallationChecker",
+    "InstallationCheckResult",
+    "InstallationStatus",
 ]
 
 
