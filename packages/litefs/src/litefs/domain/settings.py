@@ -105,6 +105,17 @@ class ForwardingSettings:
                         Must be positive. Defaults to 5.0.
         read_timeout: Timeout for reading HTTP response in seconds.
                      Must be positive. Defaults to 30.0.
+        retry_backoff_base: Base delay in seconds for exponential backoff.
+                           Must be positive. Defaults to 1.0.
+        circuit_breaker_threshold: Number of consecutive failures before
+                                  opening the circuit. Must be positive.
+                                  Defaults to 5.
+        circuit_breaker_reset_timeout: Seconds to wait before allowing
+                                      a probe request. Must be positive.
+                                      Defaults to 30.0.
+        circuit_breaker_enabled: Whether circuit breaker is enabled.
+                                If False, circuit breaker logic is bypassed.
+                                Defaults to True.
     """
 
     enabled: bool = False
@@ -115,10 +126,16 @@ class ForwardingSettings:
     scheme: str = "http"
     connect_timeout: float = 5.0
     read_timeout: float = 30.0
+    retry_backoff_base: float = 1.0
+    circuit_breaker_threshold: int = 5
+    circuit_breaker_reset_timeout: float = 30.0
+    circuit_breaker_enabled: bool = True
 
     def __post_init__(self) -> None:
         """Validate forwarding settings."""
         self._validate_timeouts()
+        self._validate_retry_backoff()
+        self._validate_circuit_breaker()
 
     def _validate_timeouts(self) -> None:
         """Validate that timeout values are positive."""
@@ -126,6 +143,18 @@ class ForwardingSettings:
             raise LiteFSConfigError("connect_timeout must be positive")
         if self.read_timeout <= 0:
             raise LiteFSConfigError("read_timeout must be positive")
+
+    def _validate_retry_backoff(self) -> None:
+        """Validate retry backoff base is positive."""
+        if self.retry_backoff_base <= 0:
+            raise LiteFSConfigError("retry_backoff_base must be positive")
+
+    def _validate_circuit_breaker(self) -> None:
+        """Validate circuit breaker configuration."""
+        if self.circuit_breaker_threshold < 1:
+            raise LiteFSConfigError("circuit_breaker_threshold must be positive")
+        if self.circuit_breaker_reset_timeout <= 0:
+            raise LiteFSConfigError("circuit_breaker_reset_timeout must be positive")
 
 
 @dataclass(frozen=True)

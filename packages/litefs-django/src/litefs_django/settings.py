@@ -123,6 +123,14 @@ def get_litefs_settings(django_settings: dict[str, Any]) -> LiteFSSettings:
             retry_count=fwd_dict.get("RETRY_COUNT", 1),
             excluded_paths=excluded_paths,
             scheme=fwd_dict.get("SCHEME", "http"),
+            connect_timeout=fwd_dict.get("CONNECT_TIMEOUT", 5.0),
+            read_timeout=fwd_dict.get("READ_TIMEOUT", 30.0),
+            retry_backoff_base=fwd_dict.get("RETRY_BACKOFF_BASE", 1.0),
+            circuit_breaker_threshold=fwd_dict.get("CIRCUIT_BREAKER_THRESHOLD", 5),
+            circuit_breaker_reset_timeout=fwd_dict.get(
+                "CIRCUIT_BREAKER_RESET_TIMEOUT", 30.0
+            ),
+            circuit_breaker_enabled=fwd_dict.get("CIRCUIT_BREAKER_ENABLED", True),
         )
     else:
         # forwarding is None if not provided

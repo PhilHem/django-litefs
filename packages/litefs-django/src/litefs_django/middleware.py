@@ -29,12 +29,16 @@ Usage:
     2. Forward write requests to the primary node
     3. Pass through responses from the primary
     4. Add X-LiteFS-Forwarded and X-LiteFS-Primary-Node headers
+    5. Retry transient failures with exponential backoff
+    6. Open circuit breaker after consecutive failures
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+import threading
+import time
+from typing import TYPE_CHECKING, Protocol
 
 from django.http import HttpResponse, HttpRequest
 from django.conf import settings as django_settings
@@ -47,13 +51,36 @@ from litefs.adapters.ports import (
     ForwardingPort,
     ForwardingResult,
     PrimaryDetectorPort,
+    RealTimeProvider,
+    TimeProvider,
 )
+from litefs.domain.retry import RetryPolicy
+from litefs.domain.circuit_breaker import CircuitBreaker, CircuitBreakerState
 from litefs_django.signals import split_brain_detected
 
 if TYPE_CHECKING:
     from typing import Callable
 
 logger = logging.getLogger(__name__)
+
+# Gateway status codes that indicate transient failures
+_GATEWAY_STATUS_CODES = frozenset({502, 503, 504})
+
+
+class Sleeper(Protocol):
+    """Protocol for sleep operations (enables testing without real delays)."""
+
+    def sleep(self, seconds: float) -> None:
+        """Sleep for the specified number of seconds."""
+        ...
+
+
+class RealSleeper:
+    """Default sleeper using time.sleep."""
+
+    def sleep(self, seconds: float) -> None:
+        """Sleep for the specified number of seconds."""
+        time.sleep(seconds)
 
 
 class SplitBrainMiddleware:
@@ -215,9 +242,14 @@ class WriteForwardingMiddleware:
     - X-LiteFS-Forwarded: true
     - X-LiteFS-Primary-Node: <primary_url>
 
+    Resilience features:
+    - Retries transient failures with exponential backoff
+    - Circuit breaker to prevent cascading failures
+    - Returns 503 with Retry-After when circuit is open
+
     Thread safety:
         - Each request is handled independently
-        - No shared mutable state between requests
+        - Circuit breaker state is protected by a lock
     """
 
     def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
@@ -236,6 +268,13 @@ class WriteForwardingMiddleware:
         self._excluded_paths: tuple[str, ...] = ()
         self._path_matcher: PathExclusionMatcher | None = None
         self._url_resolver: PrimaryURLResolver | None = None
+
+        # Resilience components
+        self._retry_policy: RetryPolicy | None = None
+        self._circuit_breaker: CircuitBreaker | None = None
+        self._time_provider: TimeProvider = RealTimeProvider()
+        self._sleeper: Sleeper = RealSleeper()
+        self._circuit_lock: threading.Lock = threading.Lock()
 
         # Try to initialize from settings
         self._initialize_forwarding()
@@ -296,11 +335,27 @@ class WriteForwardingMiddleware:
                 forwarding
             )
 
+            # Create retry policy from settings
+            self._retry_policy = RetryPolicy(
+                max_retries=forwarding.retry_count,
+                backoff_base=forwarding.retry_backoff_base,
+                max_backoff=forwarding.circuit_breaker_reset_timeout,
+            )
+
+            # Create circuit breaker from settings
+            self._circuit_breaker = CircuitBreaker(
+                threshold=forwarding.circuit_breaker_threshold,
+                reset_timeout=forwarding.circuit_breaker_reset_timeout,
+                disabled=not forwarding.circuit_breaker_enabled,
+            )
+
             logger.debug(
                 f"WriteForwardingMiddleware initialized. "
                 f"Primary URL: {self._primary_url}, "
                 f"Connect timeout: {forwarding.connect_timeout}s, "
-                f"Read timeout: {forwarding.read_timeout}s"
+                f"Read timeout: {forwarding.read_timeout}s, "
+                f"Retry count: {forwarding.retry_count}, "
+                f"Circuit breaker threshold: {forwarding.circuit_breaker_threshold}"
             )
 
         except Exception as e:
@@ -382,15 +437,27 @@ class WriteForwardingMiddleware:
     def _forward_request(self, request: HttpRequest) -> HttpResponse:
         """Forward a write request to the primary node.
 
+        Implements retry logic with exponential backoff and circuit breaker
+        pattern for resilience.
+
         Args:
             request: Django HttpRequest to forward
 
         Returns:
-            HttpResponse from the primary node with forwarding headers added
+            HttpResponse from the primary node with forwarding headers added,
+            or 503 if circuit is open or all retries exhausted.
         """
         if self._forwarding_port is None:
             logger.error("Cannot forward: forwarding port not configured")
             return self.get_response(request)
+
+        # Check circuit breaker first
+        current_time = self._time_provider.get_time_seconds()
+        if not self._should_allow_request(current_time):
+            return self._create_circuit_open_response()
+
+        # Transition to half-open if timeout elapsed
+        self._maybe_transition_to_half_open(current_time)
 
         # Resolve the primary URL using PrimaryURLResolver or fallback
         primary_url = self._resolve_primary_url()
@@ -411,20 +478,157 @@ class WriteForwardingMiddleware:
         # Get request body
         body = request.body if request.body else None
 
-        # Forward the request
-        try:
-            result = self._forwarding_port.forward_request(
-                primary_url=primary_url,
-                method=request.method,
-                path=request.path,
-                headers=headers,
-                body=body,
-                query_string=request.META.get("QUERY_STRING", ""),
-            )
-            return self._create_response(result, primary_url)
-        except Exception as e:
-            logger.error(f"Failed to forward request to primary: {e}")
-            raise
+        # Forward the request with retry logic
+        return self._forward_with_retry(
+            primary_url=primary_url,
+            method=request.method,
+            path=request.path,
+            headers=headers,
+            body=body,
+            query_string=request.META.get("QUERY_STRING", ""),
+        )
+
+    def _should_allow_request(self, current_time: float) -> bool:
+        """Check if circuit breaker allows the request.
+
+        Args:
+            current_time: Current timestamp in seconds.
+
+        Returns:
+            True if request should be allowed, False otherwise.
+        """
+        if self._circuit_breaker is None:
+            return True
+        with self._circuit_lock:
+            return self._circuit_breaker.should_allow_request(current_time)
+
+    def _maybe_transition_to_half_open(self, current_time: float) -> None:
+        """Transition circuit to half-open if timeout has elapsed.
+
+        Args:
+            current_time: Current timestamp in seconds.
+        """
+        if self._circuit_breaker is None:
+            return
+        with self._circuit_lock:
+            if self._circuit_breaker.is_half_open(current_time):
+                if self._circuit_breaker.state == CircuitBreakerState.OPEN:
+                    self._circuit_breaker = (
+                        self._circuit_breaker.transition_to_half_open()
+                    )
+
+    def _create_circuit_open_response(self) -> HttpResponse:
+        """Create 503 response when circuit is open.
+
+        Returns:
+            HttpResponse with 503 status and Retry-After header.
+        """
+        reset_timeout = 30  # Default
+        if self._circuit_breaker is not None:
+            reset_timeout = int(self._circuit_breaker.reset_timeout)
+        response = HttpResponse(
+            "Service Unavailable: circuit breaker open",
+            status=503,
+            content_type="text/plain",
+        )
+        response["Retry-After"] = str(reset_timeout)
+        return response
+
+    def _forward_with_retry(
+        self,
+        primary_url: str,
+        method: str,
+        path: str,
+        headers: dict[str, str],
+        body: bytes | None,
+        query_string: str,
+    ) -> HttpResponse:
+        """Forward request with retry logic.
+
+        Args:
+            primary_url: URL of the primary node.
+            method: HTTP method.
+            path: Request path.
+            headers: Request headers.
+            body: Request body.
+            query_string: Query string.
+
+        Returns:
+            HttpResponse from primary or error response.
+        """
+        if self._forwarding_port is None:
+            return self._create_forward_error_response()
+
+        retry_policy = self._retry_policy or RetryPolicy(max_retries=0)
+        attempt = 0
+
+        while True:
+            try:
+                result = self._forwarding_port.forward_request(
+                    primary_url=primary_url,
+                    method=method,
+                    path=path,
+                    headers=headers,
+                    body=body,
+                    query_string=query_string,
+                )
+
+                # Check if response indicates a gateway error (transient)
+                if result.status_code in _GATEWAY_STATUS_CODES:
+                    if retry_policy.should_retry(attempt):
+                        self._record_failure()
+                        backoff = retry_policy.calculate_backoff(attempt)
+                        self._sleeper.sleep(backoff)
+                        attempt += 1
+                        continue
+                    # No more retries - record failure and return
+                    self._record_failure()
+                    return self._create_response(result, primary_url)
+
+                # Success - record and return
+                self._record_success()
+                return self._create_response(result, primary_url)
+
+            except (ConnectionError, TimeoutError, OSError) as e:
+                if retry_policy.is_transient_error(e) and retry_policy.should_retry(
+                    attempt
+                ):
+                    self._record_failure()
+                    backoff = retry_policy.calculate_backoff(attempt)
+                    self._sleeper.sleep(backoff)
+                    attempt += 1
+                    continue
+                # No more retries or non-transient error
+                self._record_failure()
+                logger.error(f"Failed to forward request to primary: {e}")
+                return self._create_forward_error_response()
+
+    def _record_failure(self) -> None:
+        """Record a failure in the circuit breaker."""
+        if self._circuit_breaker is None:
+            return
+        current_time = self._time_provider.get_time_seconds()
+        with self._circuit_lock:
+            self._circuit_breaker = self._circuit_breaker.record_failure(current_time)
+
+    def _record_success(self) -> None:
+        """Record a success in the circuit breaker."""
+        if self._circuit_breaker is None:
+            return
+        with self._circuit_lock:
+            self._circuit_breaker = self._circuit_breaker.record_success()
+
+    def _create_forward_error_response(self) -> HttpResponse:
+        """Create error response when forwarding fails.
+
+        Returns:
+            HttpResponse with 503 status.
+        """
+        return HttpResponse(
+            "Service Unavailable: failed to forward request to primary",
+            status=503,
+            content_type="text/plain",
+        )
 
     def _resolve_primary_url(self) -> str | None:
         """Resolve the primary node's full URL.

@@ -11,6 +11,8 @@ from litefs.adapters.ports import (
     RaftLeaderElectionPort,
     SplitBrainDetectorPort,
     LoggingPort,
+    TimeProvider,
+    RealTimeProvider,
 )
 from litefs.domain.split_brain import RaftClusterState, RaftNodeState
 
@@ -714,3 +716,66 @@ class TestLoggingPort:
         fake = FakeLogger()
         # If runtime_checkable works, isinstance should return True
         assert isinstance(fake, LoggingPort)
+
+
+@pytest.mark.tier(1)
+@pytest.mark.tra("Port.TimeProvider")
+class TestTimeProviderPort:
+    """Test TimeProvider protocol interface."""
+
+    def test_protocol_has_get_time_seconds_method(self) -> None:
+        """Test that TimeProvider has get_time_seconds method."""
+        assert hasattr(TimeProvider, "get_time_seconds")
+
+    def test_protocol_is_runtime_checkable(self) -> None:
+        """Test that TimeProvider is runtime_checkable."""
+
+        class FakeTimeProvider:
+            def get_time_seconds(self) -> float:
+                return 1000.0
+
+        fake = FakeTimeProvider()
+        # If runtime_checkable works, isinstance should return True
+        assert isinstance(fake, TimeProvider)
+
+
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.RealTimeProvider")
+class TestRealTimeProvider:
+    """Test RealTimeProvider implementation."""
+
+    def test_returns_float(self) -> None:
+        """Test that get_time_seconds returns a float."""
+        provider = RealTimeProvider()
+        result = provider.get_time_seconds()
+        assert isinstance(result, float)
+
+    def test_returns_positive_value(self) -> None:
+        """Test that get_time_seconds returns a positive value."""
+        provider = RealTimeProvider()
+        result = provider.get_time_seconds()
+        assert result > 0
+
+    def test_satisfies_protocol(self) -> None:
+        """Test that RealTimeProvider satisfies TimeProvider protocol."""
+        provider = RealTimeProvider()
+        assert isinstance(provider, TimeProvider)
+
+    def test_returns_reasonable_timestamp(self) -> None:
+        """Test that get_time_seconds returns a reasonable Unix timestamp.
+
+        The timestamp should be after 2020-01-01 (1577836800) and before 2100.
+        """
+        provider = RealTimeProvider()
+        result = provider.get_time_seconds()
+        # After 2020-01-01
+        assert result > 1577836800
+        # Before 2100-01-01
+        assert result < 4102444800
+
+    def test_successive_calls_non_decreasing(self) -> None:
+        """Test that successive calls return non-decreasing values."""
+        provider = RealTimeProvider()
+        first = provider.get_time_seconds()
+        second = provider.get_time_seconds()
+        assert second >= first

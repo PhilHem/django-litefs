@@ -7,6 +7,7 @@ These are Protocol classes (structural subtyping) for flexible testing.
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
@@ -346,3 +347,44 @@ class ForwardingPort(Protocol):
             May raise httpx.RequestError or similar for network failures.
         """
         ...
+
+
+@runtime_checkable
+class TimeProvider(Protocol):
+    """Port interface for time operations.
+
+    Implementations provide the current time as a Unix timestamp.
+    This abstraction enables deterministic testing through fake implementations
+    and supports time-based operations like circuit breaker timeouts and
+    retry backoff calculations.
+
+    Contract:
+        - get_time_seconds() returns current Unix timestamp as float
+        - Returned value must be non-negative
+        - Successive calls must return non-decreasing values (monotonic)
+    """
+
+    def get_time_seconds(self) -> float:
+        """Return current Unix timestamp in seconds.
+
+        Returns:
+            Current time as Unix timestamp (seconds since epoch) as float.
+            The value includes fractional seconds for sub-second precision.
+        """
+        ...
+
+
+class RealTimeProvider:
+    """Default implementation: provides real system time.
+
+    Uses time.time() to return the current Unix timestamp.
+    Suitable for production use where real time is needed.
+    """
+
+    def get_time_seconds(self) -> float:
+        """Return current Unix timestamp in seconds.
+
+        Returns:
+            Current system time as Unix timestamp (seconds since epoch).
+        """
+        return time.time()
