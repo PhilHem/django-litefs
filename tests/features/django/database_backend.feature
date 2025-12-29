@@ -1,6 +1,6 @@
 # @bdd-decomposed: 2025-12-26 epic=django-litefs-8oi status=complete
 Feature: LiteFS Django Database Backend
-  As a Django application developer
+  As a developer
   I want a database backend that enforces LiteFS replication constraints
   So that data consistency is maintained across the cluster
 

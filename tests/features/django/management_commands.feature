@@ -1,6 +1,6 @@
 # @bdd-decomposed: 2025-12-27 status=decomposed
 Feature: LiteFS Django Management Commands
-  As a Django application developer
+  As a developer
   I want management commands to validate and diagnose LiteFS setup
   So that I can quickly identify and fix configuration issues
 

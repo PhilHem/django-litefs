@@ -1,8 +1,8 @@
 # @bdd-decomposed: 2025-12-26 epic=django-litefs-yhj status=complete
 Feature: Health Probes for Kubernetes and Load Balancers
-  As a Kubernetes cluster or load balancer
+  As an operator
   I want liveness and readiness probe endpoints
-  So that I can make automated routing and lifecycle decisions
+  So that automated systems can make routing and lifecycle decisions
 
   Health probes return binary ready/not-ready signals for automated systems.
   Liveness determines pod restarts. Readiness determines traffic routing.

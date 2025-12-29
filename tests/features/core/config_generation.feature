@@ -1,6 +1,6 @@
 # @bdd-decomposed: 2025-12-26 status=implemented
 Feature: LiteFS Configuration Generation
-  As a LiteFS deployment operator
+  As an operator
   I need to generate valid LiteFS YAML configuration from settings
   So that LiteFS can be started with the correct parameters
 

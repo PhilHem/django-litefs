@@ -1,6 +1,6 @@
 # @bdd-decomposed: 2025-12-27 status=decomposed
 Feature: LiteFS Django Development Mode
-  As a Django application developer
+  As a developer
   I want to disable LiteFS features during local development
   So that I can develop without running LiteFS infrastructure
 

@@ -1,6 +1,6 @@
 # @bdd-decomposed: 2025-12-27 status=decomposed
 Feature: Write Request Forwarding - Resilience
-  As a Django application developer
+  As a developer
   I want forwarding to handle transient failures gracefully
   So that my application remains available during brief primary unavailability
 

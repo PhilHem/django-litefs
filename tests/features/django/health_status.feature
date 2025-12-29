@@ -1,6 +1,6 @@
 # @bdd-decomposed: 2025-12-26 epic=django-litefs-d9q status=complete
 Feature: Health Status Endpoint for Operators
-  As an operator or monitoring system
+  As an operator
   I want a detailed health status endpoint
   So that I can diagnose cluster state and troubleshoot issues
 

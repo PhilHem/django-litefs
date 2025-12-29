@@ -1,6 +1,6 @@
 # @bdd-decomposed: 2025-12-26 epic=django-litefs-h9m status=complete
 Feature: LiteFS Django Middleware - Split-Brain Protection
-  As a Django application developer
+  As a developer
   I want middleware that protects my application during split-brain conditions
   So that data corruption is prevented when cluster consensus fails
 

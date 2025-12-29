@@ -1,8 +1,7 @@
 # @bdd-decomposed: 2025-12-26 status=implemented
 Feature: Health Status Determination
-  As a LiteFS node
-  I need to report my health status accurately
-  So that load balancers and operators can make routing and maintenance decisions
+  Nodes report health status for load balancer routing and operator decisions.
+  Health follows a priority hierarchy: unhealthy > degraded > healthy.
 
   The HealthChecker use case determines node health using a priority hierarchy:
   1. unhealthy flag (highest priority - overrides all)

@@ -1,8 +1,8 @@
 # @bdd-decomposed: 2025-12-26 epic=django-litefs-c7h status=complete
 Feature: Failover State Transitions
-  As a distributed application
-  I want automatic failover when the primary node fails
-  So that the cluster remains available for writes without operator intervention
+  Nodes automatically transition between PRIMARY and REPLICA states based on
+  leader election, health status, and cluster quorum. This provides automatic
+  failover when the primary fails, keeping the cluster available for writes.
 
   The FailoverCoordinator orchestrates state transitions between PRIMARY and REPLICA
   states based on leader election, node health, and cluster quorum. Transitions are

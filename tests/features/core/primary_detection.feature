@@ -1,8 +1,7 @@
 # @bdd-decomposed: 2025-12-26 status=implemented
 Feature: Primary Node Detection
-  As a LiteFS node
-  I need to know if I am the primary node
-  So that write operations can be routed correctly
+  Nodes detect primary status via the .primary file in the mount path.
+  This enables the database backend to route writes correctly.
 
   LiteFS uses a `.primary` file in the mount path to indicate which node
   holds the write lease. This file is managed by LiteFS itself - when a node

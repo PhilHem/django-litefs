@@ -1,8 +1,7 @@
 # @bdd-decomposed: 2025-12-26 status=implemented
 Feature: SQL Write Operation Detection
-  As a LiteFS database backend
-  I need to detect SQL write operations accurately
-  So that writes can be blocked on replica nodes and during split-brain conditions
+  SQL statements are classified as read or write operations.
+  This enables blocking writes on replicas and during split-brain conditions.
 
   The SQLDetector identifies SQL statements that modify database state. Detection
   must be accurate to avoid false positives (blocking reads) and false negatives

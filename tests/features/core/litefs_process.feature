@@ -1,6 +1,6 @@
 # @bdd-decomposed: 2025-12-27 status=decomposed
 Feature: LiteFS Process Detection
-  As a litefs-py library user
+  As a developer
   I want to detect if LiteFS is running and query its state
   So that my application can respond appropriately to LiteFS availability
 

@@ -1,6 +1,6 @@
 # @bdd-decomposed: 2025-12-27 status=implemented
 Feature: LiteFS Django App Configuration
-  As a Django application developer
+  As a developer
   I want litefs_django to integrate cleanly with Django's app system
   So that I can add LiteFS support with minimal configuration
 

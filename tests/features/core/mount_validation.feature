@@ -1,8 +1,7 @@
 # @bdd-decomposed: 2025-12-26 status=implemented
 Feature: Mount Path Validation
-  As a LiteFS database backend
-  I need to validate mount paths before use
-  So that configuration errors are caught early and runtime issues are clearly reported
+  Mount paths are validated to catch configuration errors early.
+  This ensures runtime issues are clearly reported with actionable messages.
 
   The MountValidator ensures mount paths are valid before LiteFS operations.
   Validation happens in two phases:

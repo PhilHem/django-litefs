@@ -1,8 +1,7 @@
 # @bdd-decomposed: 2025-12-26 status=implemented
 Feature: Primary Initializer - Static Leader Detection
-  As a LiteFS node in static leader mode
-  I need to determine if I am the designated primary node
-  So that the application can route write operations correctly
+  In static leader election mode, one node is pre-designated as primary.
+  The PrimaryInitializer compares hostnames to determine primary status.
 
   The PrimaryInitializer use case performs a simple comparison between the
   current node's hostname and the configured primary hostname. This is a

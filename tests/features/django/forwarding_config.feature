@@ -1,6 +1,6 @@
 # @bdd-decomposed: 2025-12-27 status=decomposed
 Feature: Write Request Forwarding - Configuration
-  As a Django application developer
+  As a developer
   I want to configure forwarding behavior for my deployment
   So that I can tune timeouts, exclude paths, and control middleware behavior
 

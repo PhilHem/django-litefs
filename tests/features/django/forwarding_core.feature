@@ -1,6 +1,6 @@
 # @bdd-decomposed: 2025-12-27 status=decomposed
 Feature: Write Request Forwarding - Core Behavior
-  As a Django application developer
+  As a developer
   I want write requests automatically forwarded from replicas to the primary
   So that my application works transparently regardless of which node receives the request
 

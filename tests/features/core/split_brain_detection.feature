@@ -1,8 +1,7 @@
 # @bdd-decomposed: 2025-12-26 status=implemented
 Feature: Split-Brain Detection
-  As a distributed application
-  I want to detect when multiple nodes claim leadership
-  So that conflicting writes can be prevented and data consistency maintained
+  Split-brain occurs when multiple nodes claim leadership simultaneously.
+  Detection prevents conflicting writes and maintains data consistency.
 
   A split-brain occurs when network partitions cause cluster consensus to break
   down, resulting in multiple nodes believing they are the leader simultaneously.
