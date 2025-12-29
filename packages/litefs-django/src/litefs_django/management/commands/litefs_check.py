@@ -1,12 +1,21 @@
 """Django management command for LiteFS health checks."""
 
+from __future__ import annotations
+
 import json
+import os
 from dataclasses import dataclass, asdict
+from pathlib import Path
 from typing import Any
 from django.core.management.base import BaseCommand, CommandError
 from django.conf import settings
 
 from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningError
+from litefs.usecases.installation_checker import (
+    InstallationChecker,
+    InstallationStatus,
+)
+from litefs.adapters.filesystem_binary_resolver import FilesystemBinaryResolver
 from litefs_django.settings import get_litefs_settings
 from litefs.domain.exceptions import LiteFSConfigError
 from litefs.domain.settings import LiteFSSettings
@@ -27,6 +36,41 @@ class CheckResult:
     name: str
     passed: bool
     message: str | None = None
+
+
+class FilesystemFileChecker:
+    """Filesystem implementation of FileCheckerPort."""
+
+    def exists(self, path: Path) -> bool:
+        """Check if file exists at path."""
+        return path.exists()
+
+    def is_executable(self, path: Path) -> bool:
+        """Check if file is executable."""
+        return os.access(path, os.X_OK)
+
+
+class SubprocessBinaryExecutor:
+    """Subprocess implementation of BinaryExecutorPort."""
+
+    def run_version_check(self, path: Path) -> tuple[bool, str]:
+        """Run version check on binary."""
+        import subprocess
+
+        try:
+            result = subprocess.run(
+                [str(path), "--version"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0:
+                return True, result.stdout.strip() or result.stderr.strip()
+            return False, result.stderr.strip() or f"Exit code: {result.returncode}"
+        except subprocess.TimeoutExpired:
+            return False, "Binary execution timed out"
+        except OSError as e:
+            return False, str(e)
 
 
 class Command(BaseCommand):
@@ -71,7 +115,7 @@ class Command(BaseCommand):
         # Health Check 1: Validate configuration
         if verbosity >= 2:
             self.stdout.write("Performing health checks...")
-            self.stdout.write("  [1/5] Validating LiteFS configuration...")
+            self.stdout.write("  [1/6] Validating LiteFS configuration...")
 
         try:
             django_settings = getattr(settings, "LITEFS", {})
@@ -88,7 +132,7 @@ class Command(BaseCommand):
 
         # Health Check 2: Validate database backend
         if verbosity >= 2:
-            self.stdout.write("  [2/5] Checking database backend configuration...")
+            self.stdout.write("  [2/6] Checking database backend configuration...")
 
         expected_backend = "litefs_django.db.backends.litefs"
         databases = getattr(settings, "DATABASES", {})
@@ -119,11 +163,13 @@ class Command(BaseCommand):
                 )
             )
             if verbosity >= 2:
-                self.stdout.write(f"        OK - Database backend is {expected_backend}")
+                self.stdout.write(
+                    f"        OK - Database backend is {expected_backend}"
+                )
 
         # Health Check 3: Verify LiteFS is enabled
         if verbosity >= 2:
-            self.stdout.write("  [3/5] Checking if LiteFS is enabled...")
+            self.stdout.write("  [3/6] Checking if LiteFS is enabled...")
 
         if litefs_settings is not None and not litefs_settings.enabled:
             issues.append(
@@ -142,7 +188,7 @@ class Command(BaseCommand):
 
         # Health Check 4: Verify mount path is accessible
         if verbosity >= 2:
-            self.stdout.write("  [4/5] Checking mount path accessibility...")
+            self.stdout.write("  [4/6] Checking mount path accessibility...")
 
         if litefs_settings is not None:
             try:
@@ -169,7 +215,66 @@ class Command(BaseCommand):
                     CheckResult(name="mount_path", passed=False, message=str(e))
                 )
 
+        # Health Check 5: Verify LiteFS binary installation
+        if verbosity >= 2:
+            self.stdout.write("  [5/6] Checking LiteFS binary installation...")
+
+        binary_resolver = FilesystemBinaryResolver()
+        binary_location = binary_resolver.resolve()
+        binary_path = binary_location.path if binary_location else None
+
+        file_checker = FilesystemFileChecker()
+        binary_executor = SubprocessBinaryExecutor()
+        installation_checker = InstallationChecker(file_checker, binary_executor)
+        install_result = installation_checker(binary_path)
+
+        if install_result.status == InstallationStatus.OK:
+            checks.append(
+                CheckResult(
+                    name="binary",
+                    passed=True,
+                    message=f"Found at {install_result.binary_path}",
+                )
+            )
+            if verbosity >= 2:
+                self.stdout.write(
+                    f"        OK - Binary found at {install_result.binary_path}"
+                )
+        else:
+            error_msg = install_result.error_message or "Binary not found"
+            fix_msg = self._get_binary_fix_message(install_result.status)
+            issues.append(
+                ConfigIssue(
+                    description=f"LiteFS binary issue: {error_msg}",
+                    fix=fix_msg,
+                )
+            )
+            checks.append(CheckResult(name="binary", passed=False, message=error_msg))
+
         return issues, checks, litefs_settings, detector
+
+    def _get_binary_fix_message(self, status: InstallationStatus) -> str:
+        """Get appropriate fix message for binary installation status.
+
+        Args:
+            status: The installation status.
+
+        Returns:
+            Fix message string.
+        """
+        if status == InstallationStatus.MISSING:
+            return (
+                "Install LiteFS binary using 'python manage.py litefs_download' "
+                "or set LITEFS_BINARY_PATH environment variable."
+            )
+        elif status == InstallationStatus.UNUSABLE:
+            return "Binary exists but is not executable. Check file permissions (chmod +x)."
+        elif status == InstallationStatus.CORRUPT:
+            return (
+                "Binary exists but fails to execute. "
+                "Try reinstalling with 'python manage.py litefs_download --force'."
+            )
+        return "Check LiteFS binary installation."
 
     def handle(self, *args: Any, **options: Any) -> None:
         """Execute health checks.
@@ -179,7 +284,8 @@ class Command(BaseCommand):
         2. Database backend is litefs_django
         3. LiteFS is enabled
         4. LiteFS mount path is accessible and mounted
-        5. Current node role can be determined (primary or replica)
+        5. LiteFS binary is installed and executable
+        6. Current node role can be determined (primary or replica)
 
         All issues are collected before reporting, allowing users to see
         all configuration problems at once.
@@ -198,15 +304,15 @@ class Command(BaseCommand):
         if verbose_flag:
             verbosity = max(verbosity, 2)
 
-        # Collect all issues first (checks 1-4)
+        # Collect all issues first (checks 1-5)
         issues, checks, litefs_settings, detector = self._collect_issues(verbosity)
 
-        # Health Check 5: Determine node role (only if we have a detector)
+        # Health Check 6: Determine node role (only if we have a detector)
         role = None
         if detector is not None:
             if verbosity >= 2:
                 self.stdout.write(
-                    "  [5/5] Checking node role (verifies LiteFS is running)..."
+                    "  [6/6] Checking node role (verifies LiteFS is running)..."
                 )
 
             try:

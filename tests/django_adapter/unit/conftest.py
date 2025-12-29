@@ -93,3 +93,35 @@ def django_settings_reset():
     # This handles unpicklable objects and module references correctly
     with override_settings():
         yield
+
+
+@pytest.fixture
+def mock_installation_checker():
+    """Mock InstallationChecker and FilesystemBinaryResolver for command tests.
+
+    This fixture mocks the binary installation check components so that
+    tests can run without requiring an actual LiteFS binary to be present.
+    By default, returns a successful installation check result.
+    """
+    from pathlib import Path
+    from unittest.mock import Mock, patch
+
+    from litefs.usecases.installation_checker import InstallationCheckResult
+
+    binary_path = Path("/usr/local/bin/litefs")
+
+    with patch(
+        "litefs_django.management.commands.litefs_check.FilesystemBinaryResolver"
+    ) as mock_resolver:
+        with patch(
+            "litefs_django.management.commands.litefs_check.InstallationChecker"
+        ) as mock_checker:
+            mock_resolver.return_value.resolve.return_value = Mock(path=binary_path)
+            mock_checker.return_value.return_value = (
+                InstallationCheckResult.create_success(binary_path)
+            )
+            yield {
+                "resolver": mock_resolver,
+                "checker": mock_checker,
+                "binary_path": binary_path,
+            }
