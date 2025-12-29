@@ -19,3 +19,34 @@ class LiteFSConfigError(Exception):
     """
 
     pass
+
+
+class BinaryDownloadError(LiteFSConfigError):
+    """Raised when binary download fails.
+
+    This exception is raised during LiteFS binary download operations
+    when network errors, HTTP errors, or other download failures occur.
+
+    Attributes:
+        message: Human-readable error description.
+        url: The URL that failed to download (optional).
+        original_error: The underlying exception that caused the failure (optional).
+    """
+
+    def __init__(
+        self,
+        message: str,
+        url: str | None = None,
+        original_error: Exception | None = None,
+    ) -> None:
+        """Initialize BinaryDownloadError.
+
+        Args:
+            message: Human-readable error description.
+            url: The URL that failed to download.
+            original_error: The underlying exception that caused the failure.
+        """
+        super().__init__(message)
+        self.message = message
+        self.url = url
+        self.original_error = original_error
