@@ -407,14 +407,26 @@ def mount_path_not_accessible(context: dict, tmp_path: Path, monkeypatch: pytest
 
 
 @when("I create a database connection")
-def create_database_connection(context: dict, tmp_path: Path):
+def create_database_connection(
+    context: dict, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     """Attempt to create a database connection.
 
     For scenarios that don't explicitly set up a valid mount path but need
     connection to succeed (e.g., WAL mode test), we set up a temp mount path.
     Scenarios that expect mount failure (via "mount path does not exist" step)
     skip the auto-setup.
+
+    IMPORTANT: We must configure django.conf.settings.LITEFS with ENABLED=True
+    to force production mode. Without this, is_dev_mode() returns True and all
+    mount path validation and WAL mode enforcement is skipped.
     """
+    from django.conf import settings as django_settings
+
+    # Configure LITEFS settings to enable production mode (required for validation)
+    # Use raising=False since LITEFS may not exist on the settings object
+    monkeypatch.setattr(django_settings, "LITEFS", {"ENABLED": True}, raising=False)
+
     settings_dict = context.get("settings_dict", {})
 
     # If no actual_mount_path was set by a previous step and we need a valid path,
