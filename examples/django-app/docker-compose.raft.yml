@@ -1,0 +1,105 @@
+version: '3.9'
+
+# Docker Compose configuration for LiteFS with Raft leader election
+# This uses py-leader for automatic leader election instead of static primary
+
+services:
+  node1:
+    build: .
+    container_name: litefs-raft-node1
+    hostname: node1
+    ports:
+      - "8001:8000"   # Django app
+      - "20201:20202" # Raft port
+    environment:
+      DJANGO_SETTINGS_MODULE: myproject.settings_raft
+      LITEFS_NODE_ID: node1
+      LITEFS_CLUSTER_MEMBERS: "node1:20202,node2:20202,node3:20202"
+      LITEFS_LEADER_ELECTION: raft
+      DEBUG: "False"
+    volumes:
+      - node1_data:/data
+      - node1_litefs:/litefs
+    networks:
+      - litefs_network
+    command: >
+      sh -c "python manage.py migrate &&
+             gunicorn --bind 0.0.0.0:8000 --workers 2 --timeout 30 myproject.wsgi"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  node2:
+    build: .
+    container_name: litefs-raft-node2
+    hostname: node2
+    ports:
+      - "8002:8000"   # Django app
+      - "20202:20202" # Raft port
+    environment:
+      DJANGO_SETTINGS_MODULE: myproject.settings_raft
+      LITEFS_NODE_ID: node2
+      LITEFS_CLUSTER_MEMBERS: "node1:20202,node2:20202,node3:20202"
+      LITEFS_LEADER_ELECTION: raft
+      DEBUG: "False"
+    volumes:
+      - node2_data:/data
+      - node2_litefs:/litefs
+    depends_on:
+      - node1
+    networks:
+      - litefs_network
+    command: >
+      sh -c "python manage.py migrate &&
+             gunicorn --bind 0.0.0.0:8000 --workers 2 --timeout 30 myproject.wsgi"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  node3:
+    build: .
+    container_name: litefs-raft-node3
+    hostname: node3
+    ports:
+      - "8003:8000"   # Django app
+      - "20203:20202" # Raft port
+    environment:
+      DJANGO_SETTINGS_MODULE: myproject.settings_raft
+      LITEFS_NODE_ID: node3
+      LITEFS_CLUSTER_MEMBERS: "node1:20202,node2:20202,node3:20202"
+      LITEFS_LEADER_ELECTION: raft
+      DEBUG: "False"
+    volumes:
+      - node3_data:/data
+      - node3_litefs:/litefs
+    depends_on:
+      - node1
+    networks:
+      - litefs_network
+    command: >
+      sh -c "python manage.py migrate &&
+             gunicorn --bind 0.0.0.0:8000 --workers 2 --timeout 30 myproject.wsgi"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  node1_data:
+  node1_litefs:
+  node2_data:
+  node2_litefs:
+  node3_data:
+  node3_litefs:
+
+networks:
+  litefs_network:
+    driver: bridge
