@@ -6,7 +6,8 @@ from litefs.domain.circuit_breaker import CircuitBreaker, CircuitBreakerState
 from litefs.domain.exceptions import LiteFSConfigError
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant.CircuitBreaker")
 class TestCircuitBreakerState:
     """Tests for CircuitBreakerState enum."""
 
@@ -23,7 +24,8 @@ class TestCircuitBreakerState:
         assert CircuitBreakerState.HALF_OPEN.value == "half_open"
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant.CircuitBreaker")
 class TestCircuitBreakerValidation:
     """Tests for CircuitBreaker validation."""
 
@@ -54,7 +56,8 @@ class TestCircuitBreakerValidation:
         assert cb.reset_timeout == 30.0
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant.CircuitBreaker")
 class TestCircuitBreakerDefaults:
     """Tests for CircuitBreaker default values."""
 
@@ -84,7 +87,8 @@ class TestCircuitBreakerDefaults:
         assert cb.disabled is False
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant.CircuitBreaker")
 class TestRecordFailure:
     """Tests for recording failures."""
 
@@ -120,7 +124,8 @@ class TestRecordFailure:
         assert updated.success_count == 0
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant.CircuitBreaker")
 class TestRecordSuccess:
     """Tests for recording successes."""
 
@@ -157,7 +162,8 @@ class TestRecordSuccess:
         assert updated is not cb
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant.CircuitBreaker")
 class TestShouldAllowRequest:
     """Tests for should_allow_request method."""
 
@@ -208,7 +214,8 @@ class TestShouldAllowRequest:
         assert cb.should_allow_request(current_time=101.0) is True
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant.CircuitBreaker")
 class TestIsOpen:
     """Tests for is_open property."""
 
@@ -238,7 +245,8 @@ class TestIsOpen:
         assert cb.is_open is False
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant.CircuitBreaker")
 class TestIsHalfOpen:
     """Tests for is_half_open method."""
 
@@ -278,7 +286,8 @@ class TestIsHalfOpen:
         assert cb.is_half_open(current_time=150.0) is True
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant.CircuitBreaker")
 class TestFailedProbe:
     """Tests for failed probe (failure in HALF_OPEN state)."""
 
@@ -308,7 +317,8 @@ class TestFailedProbe:
         assert updated.failure_count == 1
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant.CircuitBreaker")
 class TestDisabled:
     """Tests for disabled circuit breaker."""
 
@@ -340,7 +350,8 @@ class TestDisabled:
         assert cb.should_allow_request(current_time=102.0) is True
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant.CircuitBreaker")
 class TestTransitionToHalfOpen:
     """Tests for explicit transition to HALF_OPEN state."""
 

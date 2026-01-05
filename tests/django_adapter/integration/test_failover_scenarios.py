@@ -75,7 +75,8 @@ class MockPrimaryDetectorPort:
         self._is_primary = is_primary
 
 
-@pytest.mark.integration
+@pytest.mark.tier(3)
+@pytest.mark.tra("Adapter.Django.Failover")
 class TestSplitBrainDetectionDuringFailover:
     """Tests for split-brain detection during network partitions."""
 
@@ -198,7 +199,8 @@ class TestSplitBrainDetectionDuringFailover:
         assert {n.node_id for n in status.leader_nodes} == {"node1", "node2", "node3"}
 
 
-@pytest.mark.integration
+@pytest.mark.tier(3)
+@pytest.mark.tra("Adapter.Django.Failover")
 class TestWriteBlockingDuringSplitBrain:
     """Tests for blocking write operations during split-brain."""
 
@@ -341,7 +343,8 @@ class TestWriteBlockingDuringSplitBrain:
             pytest.fail("SplitBrainError raised for read operation")
 
 
-@pytest.mark.integration
+@pytest.mark.tier(3)
+@pytest.mark.tra("Adapter.Django.Failover")
 class TestMiddlewareBehaviorDuringSplitBrain:
     """Tests for SplitBrainMiddleware behavior during split-brain."""
 
@@ -474,7 +477,8 @@ class TestMiddlewareBehaviorDuringSplitBrain:
             split_brain_detected.disconnect(capture_signal)
 
 
-@pytest.mark.integration
+@pytest.mark.tier(3)
+@pytest.mark.tra("Adapter.Django.Failover")
 class TestGracefulRecoveryFromSplitBrain:
     """Tests for recovery from split-brain conditions."""
 
@@ -614,7 +618,8 @@ class TestGracefulRecoveryFromSplitBrain:
         assert status.leader_nodes[0].node_id == "node1"
 
 
-@pytest.mark.integration
+@pytest.mark.tier(3)
+@pytest.mark.tra("Adapter.Django.Failover")
 class TestDockerComposeIntegration:
     """Docker Compose integration tests for multi-node cluster scenarios.
 

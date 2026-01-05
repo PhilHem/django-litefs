@@ -15,7 +15,7 @@ test:
 	uv run pytest
 
 test-unit:
-	uv run pytest -m unit
+	uv run pytest -m "tier(1)"
 
 test-integration:
 	uv run pytest -m integration

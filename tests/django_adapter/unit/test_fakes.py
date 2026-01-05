@@ -11,7 +11,8 @@ from litefs.usecases.primary_detector import LiteFSNotRunningError
 from .fakes import FakeFailoverCoordinator, FakeHealthChecker, FakePrimaryDetector
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Testing.Fake.Django")
 class TestFakeHealthChecker:
     """Tests for FakeHealthChecker."""
 
@@ -42,7 +43,8 @@ class TestFakeHealthChecker:
         assert isinstance(status, HealthStatus)
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Testing.Fake.Django")
 class TestFakeFailoverCoordinator:
     """Tests for FakeFailoverCoordinator."""
 
@@ -114,7 +116,8 @@ class TestFakeFailoverCoordinator:
         assert coordinator.state == NodeState.REPLICA
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Testing.Fake.Django")
 class TestFakePrimaryDetector:
     """Tests for FakePrimaryDetector LiteFS-not-running simulation."""
 

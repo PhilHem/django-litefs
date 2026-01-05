@@ -18,8 +18,11 @@ if TYPE_CHECKING:
     pass
 
 
-# Mark all tests as unit tests
-pytestmark = pytest.mark.unit
+# Mark all tests with tier and TRA markers
+pytestmark = [
+    pytest.mark.tier(1),
+    pytest.mark.tra("Adapter.Http.WriteForwardingMiddleware.Resilience"),
+]
 
 
 class FakeTimeProvider:

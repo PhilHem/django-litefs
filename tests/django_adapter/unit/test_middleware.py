@@ -88,7 +88,8 @@ def create_middleware_with_mocks(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Http.WriteForwardingMiddleware")
 class TestWriteMethodsForwarded:
     """Write methods (POST, PUT, PATCH, DELETE) forwarded from replica to primary."""
 
@@ -120,7 +121,8 @@ class TestWriteMethodsForwarded:
         assert response.status_code == 200
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Http.WriteForwardingMiddleware")
 class TestReadMethodsNotForwarded:
     """Read methods (GET, HEAD, OPTIONS) handled locally on replica."""
 
@@ -153,7 +155,8 @@ class TestReadMethodsNotForwarded:
         mock_get_response.assert_called_once_with(request)
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Http.WriteForwardingMiddleware")
 class TestPrimaryHandlesLocally:
     """Write requests handled locally on primary node."""
 
@@ -186,7 +189,8 @@ class TestPrimaryHandlesLocally:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Http.WriteForwardingMiddleware")
 class TestHeaderPreservation:
     """Headers preserved during forwarding."""
 
@@ -248,7 +252,8 @@ class TestHeaderPreservation:
         assert call_args.kwargs.get("primary_url") == "http://primary.local:8000"
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Http.WriteForwardingMiddleware")
 class TestXForwardedHeaders:
     """X-Forwarded-* headers added during forwarding."""
 
@@ -317,7 +322,8 @@ class TestXForwardedHeaders:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Http.WriteForwardingMiddleware")
 class TestBodyPreservation:
     """Request body preserved during forwarding."""
 
@@ -383,7 +389,8 @@ class TestBodyPreservation:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Http.WriteForwardingMiddleware")
 class TestResponsePassthrough:
     """Response from primary passed through to client."""
 
@@ -523,7 +530,8 @@ class TestResponsePassthrough:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Http.WriteForwardingMiddleware")
 class TestForwardingIndicatorHeaders:
     """Forwarding indicator headers in response."""
 
@@ -592,7 +600,8 @@ class TestForwardingIndicatorHeaders:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter.Http.WriteForwardingMiddleware.Config")
 class TestForwardingConfiguration:
     """Forwarding enabled/disabled based on configuration."""
 

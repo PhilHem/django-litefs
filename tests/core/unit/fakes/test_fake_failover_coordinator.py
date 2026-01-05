@@ -9,7 +9,8 @@ from litefs.usecases.failover_coordinator import NodeState
 from .fake_failover_coordinator import FakeFailoverCoordinator
 
 
-@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Testing.Fake.FailoverCoordinator")
 class TestFakeFailoverCoordinator:
     """Tests for FakeFailoverCoordinator fake implementation."""
 

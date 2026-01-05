@@ -5,37 +5,34 @@ import pytest
 from litefs.domain.health import HealthStatus, LivenessResult, ReadinessResult
 
 
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant.Health")
 class TestLivenessResult:
     """Tests for LivenessResult value object."""
 
-    @pytest.mark.unit
     def test_liveness_result_is_live_true(self) -> None:
         """LivenessResult with is_live=True indicates healthy node."""
         result = LivenessResult(is_live=True)
         assert result.is_live is True
         assert result.error is None
 
-    @pytest.mark.unit
     def test_liveness_result_is_live_false_with_error(self) -> None:
         """LivenessResult with is_live=False can include error message."""
         result = LivenessResult(is_live=False, error="Connection timeout")
         assert result.is_live is False
         assert result.error == "Connection timeout"
 
-    @pytest.mark.unit
     def test_liveness_result_default_error_is_none(self) -> None:
         """LivenessResult error defaults to None."""
         result = LivenessResult(is_live=False)
         assert result.error is None
 
-    @pytest.mark.unit
     def test_liveness_result_is_frozen(self) -> None:
         """LivenessResult is immutable (frozen dataclass)."""
         result = LivenessResult(is_live=True)
         with pytest.raises(AttributeError):
             result.is_live = False  # type: ignore[misc]
 
-    @pytest.mark.unit
     def test_liveness_result_equality(self) -> None:
         """LivenessResult instances with same values are equal."""
         result1 = LivenessResult(is_live=True, error=None)
@@ -49,32 +46,32 @@ class TestLivenessResult:
         assert result1 != result3
 
 
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant.Health")
 class TestHealthStatus:
     """Tests for HealthStatus value object (existing)."""
 
-    @pytest.mark.unit
     def test_health_status_healthy(self) -> None:
         """HealthStatus accepts healthy state."""
         status = HealthStatus(state="healthy")
         assert status.state == "healthy"
 
-    @pytest.mark.unit
     def test_health_status_unhealthy(self) -> None:
         """HealthStatus accepts unhealthy state."""
         status = HealthStatus(state="unhealthy")
         assert status.state == "unhealthy"
 
-    @pytest.mark.unit
     def test_health_status_degraded(self) -> None:
         """HealthStatus accepts degraded state."""
         status = HealthStatus(state="degraded")
         assert status.state == "degraded"
 
 
+@pytest.mark.tier(1)
+@pytest.mark.tra("Domain.Invariant.Health")
 class TestReadinessResult:
     """Tests for ReadinessResult value object."""
 
-    @pytest.mark.unit
     def test_readiness_result_creation_ready(self) -> None:
         """ReadinessResult can be created with ready state."""
         result = ReadinessResult(
@@ -93,7 +90,6 @@ class TestReadinessResult:
         assert result.leader_node_ids == ("node-1",)
         assert result.error is None
 
-    @pytest.mark.unit
     def test_readiness_result_creation_not_ready(self) -> None:
         """ReadinessResult can be created with not ready state."""
         result = ReadinessResult(
@@ -111,7 +107,6 @@ class TestReadinessResult:
         assert result.leader_node_ids == ()
         assert result.error == "Node not initialized"
 
-    @pytest.mark.unit
     def test_readiness_result_with_split_brain(self) -> None:
         """ReadinessResult correctly represents split-brain scenario."""
         result = ReadinessResult(
@@ -128,7 +123,6 @@ class TestReadinessResult:
         assert result.leader_node_ids == ("node-1", "node-2")
         assert result.error == "Multiple leaders detected"
 
-    @pytest.mark.unit
     def test_readiness_result_with_error(self) -> None:
         """ReadinessResult can store error message."""
         result = ReadinessResult(
@@ -142,7 +136,6 @@ class TestReadinessResult:
 
         assert result.error == "Connection timeout"
 
-    @pytest.mark.unit
     def test_readiness_result_immutable(self) -> None:
         """ReadinessResult is immutable (frozen dataclass)."""
         result = ReadinessResult(
@@ -157,7 +150,6 @@ class TestReadinessResult:
         with pytest.raises(AttributeError):
             result.is_ready = False  # type: ignore[misc]
 
-    @pytest.mark.unit
     def test_readiness_result_equality(self) -> None:
         """ReadinessResult instances with same values are equal."""
         result1 = ReadinessResult(
@@ -179,7 +171,6 @@ class TestReadinessResult:
 
         assert result1 == result2
 
-    @pytest.mark.unit
     def test_readiness_result_error_defaults_to_none(self) -> None:
         """ReadinessResult error field defaults to None."""
         result = ReadinessResult(

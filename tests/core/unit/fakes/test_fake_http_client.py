@@ -9,20 +9,22 @@ from litefs.adapters.ports import ForwardingPort, ForwardingResult
 from .fake_http_client import FakeHttpClient
 
 
+@pytest.mark.tier(1)
+@pytest.mark.tra("Testing.Fake.HttpClient")
 class TestFakeHttpClientProtocol:
     """Verify FakeHttpClient implements ForwardingPort protocol."""
 
-    @pytest.mark.unit
     def test_implements_forwarding_port_protocol(self) -> None:
         """FakeHttpClient must satisfy ForwardingPort protocol."""
         client = FakeHttpClient()
         assert isinstance(client, ForwardingPort)
 
 
+@pytest.mark.tier(1)
+@pytest.mark.tra("Testing.Fake.HttpClient")
 class TestFakeHttpClientDefaultBehavior:
     """Test default response behavior."""
 
-    @pytest.mark.unit
     def test_default_response_status_code(self) -> None:
         """Default response has 200 status code."""
         client = FakeHttpClient()
@@ -34,7 +36,6 @@ class TestFakeHttpClientDefaultBehavior:
         )
         assert result.status_code == 200
 
-    @pytest.mark.unit
     def test_default_response_empty_headers(self) -> None:
         """Default response has empty headers dict."""
         client = FakeHttpClient()
@@ -46,7 +47,6 @@ class TestFakeHttpClientDefaultBehavior:
         )
         assert result.headers == {}
 
-    @pytest.mark.unit
     def test_default_response_empty_body(self) -> None:
         """Default response has empty body."""
         client = FakeHttpClient()
@@ -58,7 +58,6 @@ class TestFakeHttpClientDefaultBehavior:
         )
         assert result.body == b""
 
-    @pytest.mark.unit
     def test_returns_forwarding_result(self) -> None:
         """forward_request returns ForwardingResult instance."""
         client = FakeHttpClient()
@@ -71,10 +70,11 @@ class TestFakeHttpClientDefaultBehavior:
         assert isinstance(result, ForwardingResult)
 
 
+@pytest.mark.tier(1)
+@pytest.mark.tra("Testing.Fake.HttpClient")
 class TestFakeHttpClientConfigurableResponse:
     """Test configurable response behavior."""
 
-    @pytest.mark.unit
     def test_custom_status_code(self) -> None:
         """Can set custom status code."""
         client = FakeHttpClient()
@@ -87,7 +87,6 @@ class TestFakeHttpClientConfigurableResponse:
         )
         assert result.status_code == 404
 
-    @pytest.mark.unit
     def test_custom_headers(self) -> None:
         """Can set custom response headers."""
         client = FakeHttpClient()
@@ -105,7 +104,6 @@ class TestFakeHttpClientConfigurableResponse:
             "X-Custom": "value",
         }
 
-    @pytest.mark.unit
     def test_custom_body(self) -> None:
         """Can set custom response body."""
         client = FakeHttpClient()
@@ -118,7 +116,6 @@ class TestFakeHttpClientConfigurableResponse:
         )
         assert result.body == b'{"result": "success"}'
 
-    @pytest.mark.unit
     def test_combined_custom_response(self) -> None:
         """Can set all response attributes at once."""
         client = FakeHttpClient()
@@ -138,10 +135,11 @@ class TestFakeHttpClientConfigurableResponse:
         assert result.body == b'{"id": 1}'
 
 
+@pytest.mark.tier(1)
+@pytest.mark.tra("Testing.Fake.HttpClient")
 class TestFakeHttpClientExceptionBehavior:
     """Test exception raising behavior."""
 
-    @pytest.mark.unit
     def test_raises_configured_exception(self) -> None:
         """Can configure client to raise exception."""
         client = FakeHttpClient()
@@ -154,7 +152,6 @@ class TestFakeHttpClientExceptionBehavior:
                 headers={},
             )
 
-    @pytest.mark.unit
     def test_raises_timeout_error(self) -> None:
         """Can configure client to raise timeout."""
         client = FakeHttpClient()
@@ -167,7 +164,6 @@ class TestFakeHttpClientExceptionBehavior:
                 headers={},
             )
 
-    @pytest.mark.unit
     def test_clear_exception(self) -> None:
         """Can clear exception to resume normal behavior."""
         client = FakeHttpClient()
@@ -183,10 +179,11 @@ class TestFakeHttpClientExceptionBehavior:
         assert result.status_code == 200
 
 
+@pytest.mark.tier(1)
+@pytest.mark.tra("Testing.Fake.HttpClient")
 class TestFakeHttpClientRequestRecording:
     """Test request recording for assertions."""
 
-    @pytest.mark.unit
     def test_records_request_parameters(self) -> None:
         """Records all request parameters for later inspection."""
         client = FakeHttpClient()
@@ -207,7 +204,6 @@ class TestFakeHttpClientRequestRecording:
         assert req["body"] == b'{"name": "test"}'
         assert req["query_string"] == "active=true"
 
-    @pytest.mark.unit
     def test_multiple_requests_recorded(self) -> None:
         """Records multiple requests in order."""
         client = FakeHttpClient()
@@ -227,7 +223,6 @@ class TestFakeHttpClientRequestRecording:
         assert client.requests[0]["path"] == "/first"
         assert client.requests[1]["path"] == "/second"
 
-    @pytest.mark.unit
     def test_clear_requests(self) -> None:
         """Can clear recorded requests."""
         client = FakeHttpClient()
@@ -240,7 +235,6 @@ class TestFakeHttpClientRequestRecording:
         client.clear_requests()
         assert len(client.requests) == 0
 
-    @pytest.mark.unit
     def test_requests_recorded_even_with_exception(self) -> None:
         """Records request even when exception is raised."""
         client = FakeHttpClient()
@@ -256,10 +250,11 @@ class TestFakeHttpClientRequestRecording:
         assert client.requests[0]["path"] == "/api/test"
 
 
+@pytest.mark.tier(1)
+@pytest.mark.tra("Testing.Fake.HttpClient")
 class TestFakeHttpClientOptionalParameters:
     """Test handling of optional parameters."""
 
-    @pytest.mark.unit
     def test_body_defaults_to_none(self) -> None:
         """Body parameter defaults to None when not provided."""
         client = FakeHttpClient()
@@ -271,7 +266,6 @@ class TestFakeHttpClientOptionalParameters:
         )
         assert client.requests[0]["body"] is None
 
-    @pytest.mark.unit
     def test_query_string_defaults_to_empty(self) -> None:
         """Query string defaults to empty string when not provided."""
         client = FakeHttpClient()
