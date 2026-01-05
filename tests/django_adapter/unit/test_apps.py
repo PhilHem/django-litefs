@@ -6,7 +6,6 @@ from unittest.mock import patch, Mock
 import pytest
 
 from litefs.domain.settings import LiteFSSettings, StaticLeaderConfig
-from litefs.usecases.primary_detector import LiteFSNotRunningError
 from litefs_django.apps import LiteFSDjangoConfig
 from .fakes import (
     FakeMountValidator,

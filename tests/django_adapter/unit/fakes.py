@@ -12,6 +12,9 @@ from litefs.domain.split_brain import RaftClusterState, RaftNodeState
 from litefs.usecases.primary_detector import LiteFSNotRunningError
 
 if TYPE_CHECKING:
+    from pathlib import Path
+    from typing import Any
+
     from litefs.domain.health import HealthStatus
     from litefs.usecases.failover_coordinator import NodeState
 
