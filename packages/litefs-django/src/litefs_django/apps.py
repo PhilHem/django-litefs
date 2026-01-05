@@ -1,5 +1,6 @@
 """Django app configuration for LiteFS."""
 
+import atexit
 import logging
 from pathlib import Path
 from typing import Callable, Any
@@ -11,6 +12,7 @@ from litefs_django.settings import get_litefs_settings
 from litefs.usecases.mount_validator import MountValidator
 from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningError
 from litefs.usecases.primary_initializer import PrimaryInitializer
+from litefs.usecases.primary_marker_writer import PrimaryMarkerWriter
 from litefs.adapters.ports import EnvironmentNodeIDResolver, NodeIDResolverPort
 
 logger = logging.getLogger(__name__)
@@ -38,6 +40,11 @@ def _default_primary_detector_factory(mount_path: str) -> PrimaryDetector:
     return PrimaryDetector(mount_path)
 
 
+def _default_primary_marker_writer_factory(mount_path: str) -> PrimaryMarkerWriter:
+    """Default factory for creating PrimaryMarkerWriter instances."""
+    return PrimaryMarkerWriter(mount_path)
+
+
 class LiteFSDjangoConfig(AppConfig):
     """Django app configuration for LiteFS adapter."""
 
@@ -46,16 +53,24 @@ class LiteFSDjangoConfig(AppConfig):
     verbose_name = "LiteFS Django Adapter"
 
     # Dependency injection factories (can be overridden for testing)
-    mount_validator_factory: Callable[[], MountValidator] = _default_mount_validator_factory
+    mount_validator_factory: Callable[[], MountValidator] = (
+        _default_mount_validator_factory
+    )
     node_id_resolver_factory: Callable[[], NodeIDResolverPort] = (
         _default_node_id_resolver_factory
     )
-    primary_initializer_factory: Callable[
-        [Any], PrimaryInitializer
-    ] = _default_primary_initializer_factory
-    primary_detector_factory: Callable[
-        [str], PrimaryDetector
-    ] = _default_primary_detector_factory
+    primary_initializer_factory: Callable[[Any], PrimaryInitializer] = (
+        _default_primary_initializer_factory
+    )
+    primary_detector_factory: Callable[[str], PrimaryDetector] = (
+        _default_primary_detector_factory
+    )
+    primary_marker_writer_factory: Callable[[str], PrimaryMarkerWriter] = (
+        _default_primary_marker_writer_factory
+    )
+
+    # Instance attribute for cleanup reference
+    _marker_writer: PrimaryMarkerWriter | None = None
 
     def ready(self) -> None:
         """Validate LiteFS settings and check availability on startup."""
@@ -110,6 +125,12 @@ class LiteFSDjangoConfig(AppConfig):
                         )
                         is_primary = initializer.is_primary(current_node_id)
 
+                        # If primary, write the .primary marker file
+                        if is_primary:
+                            self._write_primary_marker(
+                                litefs_settings.mount_path, current_node_id
+                            )
+
                         logger.info(
                             f"LiteFS initialized (static mode). Node is "
                             f"{'primary' if is_primary else 'replica'}."
@@ -135,7 +156,41 @@ class LiteFSDjangoConfig(AppConfig):
             # Don't raise - allow Django to start even if LiteFS config is invalid
             # Application will fail when trying to use database backend
 
+    def _write_primary_marker(self, mount_path: str, node_id: str) -> None:
+        """Write the .primary marker file for static leader election.
 
+        Args:
+            mount_path: Path to the LiteFS mount point.
+            node_id: The node ID to write to the marker file.
+        """
+        try:
+            marker_writer = self.primary_marker_writer_factory(mount_path)
 
+            # Check for existing marker with different content (potential misconfiguration)
+            existing = marker_writer.read_marker()
+            if existing and existing != node_id:
+                logger.warning(
+                    f"Overwriting .primary marker file with different content. "
+                    f"Was: {existing}, Now: {node_id}. "
+                    "This may indicate a configuration issue."
+                )
 
+            marker_writer.write_marker(node_id)
+            self._marker_writer = marker_writer
 
+            # Register cleanup on shutdown
+            atexit.register(self._cleanup_primary_marker)
+
+            logger.info(f"Wrote .primary marker file for node: {node_id}")
+        except OSError as e:
+            logger.error(f"Failed to write .primary marker file: {e}")
+            # Don't raise - allow Django to start, but primary status may not work
+
+    def _cleanup_primary_marker(self) -> None:
+        """Remove .primary marker file on clean shutdown."""
+        if self._marker_writer is not None:
+            try:
+                self._marker_writer.remove_marker()
+                logger.info("Removed .primary marker file on shutdown")
+            except OSError as e:
+                logger.warning(f"Failed to remove .primary marker file: {e}")

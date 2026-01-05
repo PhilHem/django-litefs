@@ -3,6 +3,7 @@
 from litefs.usecases.cached_primary_detector import CachedPrimaryDetector
 from litefs.usecases.mount_validator import MountValidator
 from litefs.usecases.primary_initializer import PrimaryInitializer
+from litefs.usecases.primary_marker_writer import PrimaryMarkerWriter
 from litefs.usecases.sql_detector import SQLDetector
 from litefs.usecases.health_checker import HealthChecker
 from litefs.usecases.failover_coordinator import FailoverCoordinator
@@ -22,6 +23,7 @@ __all__ = [
     "CachedPrimaryDetector",
     "MountValidator",
     "PrimaryInitializer",
+    "PrimaryMarkerWriter",
     "SQLDetector",
     "HealthChecker",
     "FailoverCoordinator",
@@ -36,6 +38,3 @@ __all__ = [
     "InstallationCheckResult",
     "InstallationStatus",
 ]
-
-
-

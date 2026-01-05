@@ -478,3 +478,55 @@ class BinaryResolverPort(Protocol):
             None if the binary is not found on the filesystem.
         """
         ...
+
+
+@runtime_checkable
+class PrimaryMarkerWriterPort(Protocol):
+    """Port interface for writing the .primary marker file.
+
+    Implementations write a marker file that LiteFS uses to determine
+    which node is the primary (can accept writes) in static lease mode.
+
+    Contract:
+        - write_marker(node_id) writes the marker file with the node ID
+        - remove_marker() removes the marker file (idempotent)
+        - marker_exists() returns True if marker file exists
+        - read_marker() returns marker content or None if not exists
+    """
+
+    def write_marker(self, node_id: str) -> None:
+        """Write the primary marker file.
+
+        Args:
+            node_id: The node ID to write to the marker file.
+
+        Raises:
+            OSError: If file write fails.
+        """
+        ...
+
+    def remove_marker(self) -> None:
+        """Remove the primary marker file.
+
+        Idempotent: safe to call even if file doesn't exist.
+
+        Raises:
+            OSError: If file removal fails (other than FileNotFoundError).
+        """
+        ...
+
+    def marker_exists(self) -> bool:
+        """Check if the primary marker file exists.
+
+        Returns:
+            True if .primary file exists, False otherwise.
+        """
+        ...
+
+    def read_marker(self) -> str | None:
+        """Read current marker content.
+
+        Returns:
+            The node ID from the marker file, or None if file doesn't exist.
+        """
+        ...

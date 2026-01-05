@@ -334,3 +334,104 @@ class FakeFailoverCoordinator:
         from litefs.usecases.failover_coordinator import NodeState
 
         self._node_state = NodeState.REPLICA
+
+
+class FakePrimaryMarkerWriter:
+    """In-memory fake for PrimaryMarkerWriter - no filesystem access.
+
+    Use this instead of mocking PrimaryMarkerWriter in unit tests for:
+    - Faster test execution (no filesystem I/O)
+    - Cleaner test code (no mock.patch boilerplate)
+    - Stateful testing (track marker content during test)
+    - Error injection (simulate filesystem failures)
+
+    Implements PrimaryMarkerWriterPort protocol for type safety.
+
+    Example:
+        def test_static_mode_writes_marker(fake_marker_writer):
+            fake_marker_writer.write_marker("node1")
+            assert fake_marker_writer.read_marker() == "node1"
+            assert fake_marker_writer.marker_exists() is True
+    """
+
+    def __init__(self, mount_path: str | None = None) -> None:
+        """Initialize with empty marker.
+
+        Args:
+            mount_path: Ignored. Accepted for signature compatibility with
+                PrimaryMarkerWriter. Allows this fake to be used as a drop-in
+                replacement in tests.
+        """
+        # mount_path is ignored - we're an in-memory fake
+        self._mount_path = mount_path
+        self._content: str | None = None
+        self._write_error: Exception | None = None
+        self._remove_error: Exception | None = None
+
+    def write_marker(self, node_id: str) -> None:
+        """Write the marker (in-memory).
+
+        Args:
+            node_id: The node ID to store.
+
+        Raises:
+            Exception: If write error was set via set_write_error().
+        """
+        if self._write_error:
+            raise self._write_error
+        self._content = node_id
+
+    def remove_marker(self) -> None:
+        """Remove the marker (in-memory).
+
+        Idempotent: safe to call even if marker not set.
+
+        Raises:
+            Exception: If remove error was set via set_remove_error().
+        """
+        if self._remove_error:
+            raise self._remove_error
+        self._content = None
+
+    def marker_exists(self) -> bool:
+        """Check if marker has content.
+
+        Returns:
+            True if marker content is set, False otherwise.
+        """
+        return self._content is not None
+
+    def read_marker(self) -> str | None:
+        """Read marker content.
+
+        Returns:
+            The stored node ID, or None if not set.
+        """
+        return self._content
+
+    def set_write_error(self, error: Exception | None) -> None:
+        """Set error to raise on next write_marker() call.
+
+        Args:
+            error: Exception to raise, or None to clear.
+        """
+        self._write_error = error
+
+    def set_remove_error(self, error: Exception | None) -> None:
+        """Set error to raise on next remove_marker() call.
+
+        Args:
+            error: Exception to raise, or None to clear.
+        """
+        self._remove_error = error
+
+    def set_initial_content(self, content: str | None) -> None:
+        """Set initial marker content for testing scenarios.
+
+        Useful for testing overwrite warning scenarios where
+        a different node's marker already exists.
+
+        Args:
+            content: Initial content, or None to clear.
+        """
+        self._content = content
