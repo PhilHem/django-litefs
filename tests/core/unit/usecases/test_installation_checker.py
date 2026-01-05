@@ -5,7 +5,6 @@ from unittest.mock import Mock
 
 import pytest
 
-from litefs.domain.binary import BinaryLocation
 from litefs.usecases.installation_checker import (
     InstallationChecker,
     InstallationCheckResult,

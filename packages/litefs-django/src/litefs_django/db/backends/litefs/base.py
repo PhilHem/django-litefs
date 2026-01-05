@@ -11,7 +11,7 @@ from django.db.backends.sqlite3.base import (
     SQLiteCursorWrapper as SQLite3Cursor,
 )
 
-from litefs.adapters.ports import PrimaryDetectorPort, SplitBrainDetectorPort
+from litefs.adapters.ports import PrimaryDetectorPort
 from litefs.usecases.mount_validator import MountValidator
 from litefs.usecases.primary_detector import PrimaryDetector
 from litefs.usecases.split_brain_detector import SplitBrainDetector

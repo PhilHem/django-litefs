@@ -73,3 +73,6 @@ class TestSQLDetector:
         assert detector.is_write_operation("WITH UPDATE AS (SELECT 1) UPDATE test SET x = 1") is True
 
 
+
+
+

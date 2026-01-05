@@ -8,8 +8,6 @@ Verifies:
 
 from __future__ import annotations
 
-import inspect
-from typing import Protocol, get_type_hints, runtime_checkable
 
 import pytest
 
@@ -41,7 +39,6 @@ class TestPrimaryDetectorProtocolExists:
     @pytest.mark.tier(1)
     def test_primary_detector_implements_protocol(self, tmp_path):
         """PrimaryDetector should implement PrimaryDetectorPort."""
-        from litefs.adapters.ports import PrimaryDetectorPort
 
         mount_path = tmp_path / "litefs"
         mount_path.mkdir()
@@ -58,7 +55,6 @@ class TestPrimaryDetectorProtocolExists:
     @pytest.mark.tier(1)
     def test_fake_primary_detector_implements_protocol(self):
         """FakePrimaryDetector should implement PrimaryDetectorPort."""
-        from litefs.adapters.ports import PrimaryDetectorPort
 
         from .fakes import FakePrimaryDetector
 

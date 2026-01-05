@@ -119,7 +119,9 @@ class TestPrimaryInitializerPBT:
         result3 = initializer.is_primary(current_hostname=hostname)
 
         # All results should be identical
-        assert result1 == result2 == result3 == True
+        assert result1 is True
+        assert result2 is True
+        assert result3 is True
 
     @given(
         primary_hostname=st.text(
@@ -149,7 +151,7 @@ class TestPrimaryInitializerPBT:
         result = initializer.is_primary(current_hostname=current_hostname)
 
         # Result should match the equality check
-        expected = (primary_hostname == current_hostname)
+        expected = primary_hostname == current_hostname
         assert result == expected
 
     @given(

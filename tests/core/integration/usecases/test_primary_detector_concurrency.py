@@ -1,10 +1,8 @@
 """Integration tests for PrimaryDetector concurrency behavior."""
 
-import os
 import random
 import threading
 import pytest
-from pathlib import Path
 
 from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningError
 
@@ -91,7 +89,9 @@ class TestPrimaryDetectorConcurrency:
         # Verify: All exceptions are LiteFSNotRunningError (no other exception types)
         exception_types = [err_type for err_type, _ in errors]
         non_expected_errors = [
-            err for err_type, err_msg in errors if err_type != "LiteFSNotRunningError"
+            (err_type, err_msg)
+            for err_type, err_msg in errors
+            if err_type != "LiteFSNotRunningError"
         ]
         assert len(non_expected_errors) == 0, (
             f"Unexpected exception types during mount path deletion: {non_expected_errors}. "
@@ -232,5 +232,3 @@ class TestPrimaryDetectorConcurrency:
             f"This indicates exception type varies based on timing of deletion relative to "
             f"mount_path.exists() vs primary_file.exists() checks."
         )
-
-

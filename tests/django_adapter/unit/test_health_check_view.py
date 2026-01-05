@@ -1,7 +1,7 @@
 """Unit tests for health check view."""
 
 import json
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 import pytest
 from django.test import RequestFactory
@@ -27,14 +27,18 @@ class TestHealthCheckView:
 
         with patch("litefs_django.views.get_primary_detector") as mock_detector_func:
             with patch("litefs_django.views.get_health_checker") as mock_health_func:
-                with patch("litefs_django.views.get_failover_coordinator") as mock_coord_func:
+                with patch(
+                    "litefs_django.views.get_failover_coordinator"
+                ) as mock_coord_func:
                     # Setup mocks
                     mock_detector = Mock()
                     mock_detector.is_primary.return_value = True
                     mock_detector_func.return_value = mock_detector
 
                     mock_health = Mock()
-                    mock_health.check_health.return_value = HealthStatus(state="healthy")
+                    mock_health.check_health.return_value = HealthStatus(
+                        state="healthy"
+                    )
                     mock_health_func.return_value = mock_health
 
                     mock_coord = Mock()
@@ -52,13 +56,17 @@ class TestHealthCheckView:
 
         with patch("litefs_django.views.get_primary_detector") as mock_detector_func:
             with patch("litefs_django.views.get_health_checker") as mock_health_func:
-                with patch("litefs_django.views.get_failover_coordinator") as mock_coord_func:
+                with patch(
+                    "litefs_django.views.get_failover_coordinator"
+                ) as mock_coord_func:
                     mock_detector = Mock()
                     mock_detector.is_primary.return_value = True
                     mock_detector_func.return_value = mock_detector
 
                     mock_health = Mock()
-                    mock_health.check_health.return_value = HealthStatus(state="healthy")
+                    mock_health.check_health.return_value = HealthStatus(
+                        state="healthy"
+                    )
                     mock_health_func.return_value = mock_health
 
                     mock_coord = Mock()
@@ -76,13 +84,17 @@ class TestHealthCheckView:
 
         with patch("litefs_django.views.get_primary_detector") as mock_detector_func:
             with patch("litefs_django.views.get_health_checker") as mock_health_func:
-                with patch("litefs_django.views.get_failover_coordinator") as mock_coord_func:
+                with patch(
+                    "litefs_django.views.get_failover_coordinator"
+                ) as mock_coord_func:
                     mock_detector = Mock()
                     mock_detector.is_primary.return_value = False
                     mock_detector_func.return_value = mock_detector
 
                     mock_health = Mock()
-                    mock_health.check_health.return_value = HealthStatus(state="healthy")
+                    mock_health.check_health.return_value = HealthStatus(
+                        state="healthy"
+                    )
                     mock_health_func.return_value = mock_health
 
                     mock_coord = Mock()
@@ -100,13 +112,17 @@ class TestHealthCheckView:
 
         with patch("litefs_django.views.get_primary_detector") as mock_detector_func:
             with patch("litefs_django.views.get_health_checker") as mock_health_func:
-                with patch("litefs_django.views.get_failover_coordinator") as mock_coord_func:
+                with patch(
+                    "litefs_django.views.get_failover_coordinator"
+                ) as mock_coord_func:
                     mock_detector = Mock()
                     mock_detector.is_primary.return_value = True
                     mock_detector_func.return_value = mock_detector
 
                     mock_health = Mock()
-                    mock_health.check_health.return_value = HealthStatus(state="healthy")
+                    mock_health.check_health.return_value = HealthStatus(
+                        state="healthy"
+                    )
                     mock_health_func.return_value = mock_health
 
                     mock_coord = Mock()
@@ -125,13 +141,17 @@ class TestHealthCheckView:
 
         with patch("litefs_django.views.get_primary_detector") as mock_detector_func:
             with patch("litefs_django.views.get_health_checker") as mock_health_func:
-                with patch("litefs_django.views.get_failover_coordinator") as mock_coord_func:
+                with patch(
+                    "litefs_django.views.get_failover_coordinator"
+                ) as mock_coord_func:
                     mock_detector = Mock()
                     mock_detector.is_primary.return_value = True
                     mock_detector_func.return_value = mock_detector
 
                     mock_health = Mock()
-                    mock_health.check_health.return_value = HealthStatus(state="degraded")
+                    mock_health.check_health.return_value = HealthStatus(
+                        state="degraded"
+                    )
                     mock_health_func.return_value = mock_health
 
                     mock_coord = Mock()
@@ -149,13 +169,17 @@ class TestHealthCheckView:
 
         with patch("litefs_django.views.get_primary_detector") as mock_detector_func:
             with patch("litefs_django.views.get_health_checker") as mock_health_func:
-                with patch("litefs_django.views.get_failover_coordinator") as mock_coord_func:
+                with patch(
+                    "litefs_django.views.get_failover_coordinator"
+                ) as mock_coord_func:
                     mock_detector = Mock()
                     mock_detector.is_primary.return_value = True
                     mock_detector_func.return_value = mock_detector
 
                     mock_health = Mock()
-                    mock_health.check_health.return_value = HealthStatus(state="unhealthy")
+                    mock_health.check_health.return_value = HealthStatus(
+                        state="unhealthy"
+                    )
                     mock_health_func.return_value = mock_health
 
                     mock_coord = Mock()
@@ -173,13 +197,17 @@ class TestHealthCheckView:
 
         with patch("litefs_django.views.get_primary_detector") as mock_detector_func:
             with patch("litefs_django.views.get_health_checker") as mock_health_func:
-                with patch("litefs_django.views.get_failover_coordinator") as mock_coord_func:
+                with patch(
+                    "litefs_django.views.get_failover_coordinator"
+                ) as mock_coord_func:
                     mock_detector = Mock()
                     mock_detector.is_primary.return_value = True
                     mock_detector_func.return_value = mock_detector
 
                     mock_health = Mock()
-                    mock_health.check_health.return_value = HealthStatus(state="healthy")
+                    mock_health.check_health.return_value = HealthStatus(
+                        state="healthy"
+                    )
                     mock_health_func.return_value = mock_health
 
                     mock_coord = Mock()
@@ -198,13 +226,17 @@ class TestHealthCheckView:
 
         with patch("litefs_django.views.get_primary_detector") as mock_detector_func:
             with patch("litefs_django.views.get_health_checker") as mock_health_func:
-                with patch("litefs_django.views.get_failover_coordinator") as mock_coord_func:
+                with patch(
+                    "litefs_django.views.get_failover_coordinator"
+                ) as mock_coord_func:
                     mock_detector = Mock()
                     mock_detector.is_primary.return_value = True
                     mock_detector_func.return_value = mock_detector
 
                     mock_health = Mock()
-                    mock_health.check_health.return_value = HealthStatus(state="healthy")
+                    mock_health.check_health.return_value = HealthStatus(
+                        state="healthy"
+                    )
                     mock_health_func.return_value = mock_health
 
                     mock_coord = Mock()
@@ -224,13 +256,17 @@ class TestHealthCheckView:
 
         with patch("litefs_django.views.get_primary_detector") as mock_detector_func:
             with patch("litefs_django.views.get_health_checker") as mock_health_func:
-                with patch("litefs_django.views.get_failover_coordinator") as mock_coord_func:
+                with patch(
+                    "litefs_django.views.get_failover_coordinator"
+                ) as mock_coord_func:
                     mock_detector = Mock()
                     mock_detector.is_primary.return_value = True
                     mock_detector_func.return_value = mock_detector
 
                     mock_health = Mock()
-                    mock_health.check_health.return_value = HealthStatus(state="healthy")
+                    mock_health.check_health.return_value = HealthStatus(
+                        state="healthy"
+                    )
                     mock_health_func.return_value = mock_health
 
                     mock_coord = Mock()
@@ -254,13 +290,19 @@ class TestHealthCheckView:
 
         with patch("litefs_django.views.get_primary_detector") as mock_detector_func:
             with patch("litefs_django.views.get_health_checker") as mock_health_func:
-                with patch("litefs_django.views.get_failover_coordinator") as mock_coord_func:
+                with patch(
+                    "litefs_django.views.get_failover_coordinator"
+                ) as mock_coord_func:
                     mock_detector = Mock()
-                    mock_detector.is_primary.side_effect = LiteFSNotRunningError("Mount not found")
+                    mock_detector.is_primary.side_effect = LiteFSNotRunningError(
+                        "Mount not found"
+                    )
                     mock_detector_func.return_value = mock_detector
 
                     mock_health = Mock()
-                    mock_health.check_health.return_value = HealthStatus(state="unhealthy")
+                    mock_health.check_health.return_value = HealthStatus(
+                        state="unhealthy"
+                    )
                     mock_health_func.return_value = mock_health
 
                     mock_coord = Mock()
@@ -280,20 +322,24 @@ class TestHealthCheckView:
 
         with patch("litefs_django.views.get_primary_detector") as mock_detector_func:
             with patch("litefs_django.views.get_health_checker") as mock_health_func:
-                with patch("litefs_django.views.get_failover_coordinator") as mock_coord_func:
+                with patch(
+                    "litefs_django.views.get_failover_coordinator"
+                ) as mock_coord_func:
                     mock_detector = Mock()
                     mock_detector.is_primary.return_value = True
                     mock_detector_func.return_value = mock_detector
 
                     mock_health = Mock()
-                    mock_health.check_health.return_value = HealthStatus(state="healthy")
+                    mock_health.check_health.return_value = HealthStatus(
+                        state="healthy"
+                    )
                     mock_health_func.return_value = mock_health
 
                     mock_coord = Mock()
                     mock_coord.state = NodeState.PRIMARY
                     mock_coord_func.return_value = mock_coord
 
-                    response = health_check_view(request)
+                    _response = health_check_view(request)  # noqa: F841
 
                     # Verify check_health was called
                     mock_health.check_health.assert_called()
@@ -304,20 +350,24 @@ class TestHealthCheckView:
 
         with patch("litefs_django.views.get_primary_detector") as mock_detector_func:
             with patch("litefs_django.views.get_health_checker") as mock_health_func:
-                with patch("litefs_django.views.get_failover_coordinator") as mock_coord_func:
+                with patch(
+                    "litefs_django.views.get_failover_coordinator"
+                ) as mock_coord_func:
                     mock_detector = Mock()
                     mock_detector.is_primary.return_value = True
                     mock_detector_func.return_value = mock_detector
 
                     mock_health = Mock()
-                    mock_health.check_health.return_value = HealthStatus(state="healthy")
+                    mock_health.check_health.return_value = HealthStatus(
+                        state="healthy"
+                    )
                     mock_health_func.return_value = mock_health
 
                     mock_coord = Mock()
                     mock_coord.state = NodeState.PRIMARY
                     mock_coord_func.return_value = mock_coord
 
-                    response = health_check_view(request)
+                    _response = health_check_view(request)  # noqa: F841
 
                     # Verify is_primary was called
                     mock_detector.is_primary.assert_called()

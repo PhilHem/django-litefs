@@ -6,11 +6,9 @@ TRA Namespace: Adapter.Django.DevMode
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
-from unittest.mock import Mock, patch
 
 import pytest
 from django.test import override_settings
@@ -21,8 +19,7 @@ _project_root = Path(__file__).parent.parent.parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-from litefs_django.db.backends.litefs.base import DatabaseWrapper, LiteFSCursor
-from tests.django_adapter.unit.fakes import FakePrimaryDetector, FakeSplitBrainDetector
+from litefs_django.db.backends.litefs.base import DatabaseWrapper  # noqa: E402
 
 if TYPE_CHECKING:
     pass
@@ -191,7 +188,9 @@ def test_same_codebase_works_in_both_modes() -> None:
 
 
 @given(parsers.parse("a Django project with LITEFS settings:"))
-def django_project_with_litefs_settings(context: dict, datatable, tmp_path: Path) -> None:
+def django_project_with_litefs_settings(
+    context: dict, datatable, tmp_path: Path
+) -> None:
     """Set up Django project with LITEFS settings from table.
 
     Args:
@@ -243,15 +242,19 @@ def django_project_with_litefs_settings(context: dict, datatable, tmp_path: Path
                 var_name = var_part
                 env_value = env_vars.get(var_name)
                 if env_value is not None:
-                    litefs_settings[key] = env_value.lower() == "true" if env_value.lower() in ("true", "false") else env_value
-    
+                    litefs_settings[key] = (
+                        env_value.lower() == "true"
+                        if env_value.lower() in ("true", "false")
+                        else env_value
+                    )
+
     context["litefs_settings"] = litefs_settings
-    
+
     # If enabled is not False (i.e., production mode), we need mount_path in OPTIONS
     # Create a temp mount path for testing
     mount_path = tmp_path / "litefs"
     mount_path.mkdir(parents=True, exist_ok=True)
-    
+
     options = {}
     # Check if mount_path is specified in settings
     if "MOUNT_PATH" in litefs_settings:
@@ -267,7 +270,7 @@ def django_project_with_litefs_settings(context: dict, datatable, tmp_path: Path
         enabled = litefs_settings.get("ENABLED", True)
         if enabled is not False:
             options["litefs_mount_path"] = str(mount_path)
-    
+
     context["settings_dict"] = {
         "ENGINE": "litefs_django.db.backends.litefs",
         "NAME": "test.db",
@@ -319,7 +322,7 @@ def enabled_not_specified(context: dict) -> None:
         context["litefs_settings"].pop("ENABLED", None)
 
 
-@given(parsers.parse('a Django project with LITEFS.enabled = {value}'))
+@given(parsers.parse("a Django project with LITEFS.enabled = {value}"))
 def django_project_with_litefs_enabled(context: dict, value: str) -> None:
     """Set up Django project with LITEFS.enabled value."""
     enabled = value.lower() == "true"
@@ -349,7 +352,7 @@ def fuse_not_available(context: dict) -> None:
     context["fuse_unavailable"] = True
 
 
-@given(parsers.parse('environment variable {var} is not set'))
+@given(parsers.parse("environment variable {var} is not set"))
 def environment_variable_not_set(context: dict, var: str) -> None:
     """Mark that environment variable is not set."""
     context["env_vars"] = context.get("env_vars", {})
@@ -398,7 +401,11 @@ def database_backend_initializes(context: dict) -> None:
         env_vars = context.get("env_vars", {})
         processed_settings = {}
         for key, value in litefs_settings.items():
-            if isinstance(value, str) and value.startswith("${") and value.endswith("}"):
+            if (
+                isinstance(value, str)
+                and value.startswith("${")
+                and value.endswith("}")
+            ):
                 # Extract env var name and default value
                 var_part = value[2:-1]  # Remove ${ and }
                 if ":" in var_part:
@@ -435,15 +442,18 @@ def database_backend_initializes(context: dict) -> None:
                         processed_settings[key] = value  # Keep original template
             else:
                 processed_settings[key] = value  # Keep non-template values
-        
+
         # Update context with processed settings BEFORE checking mount_path
         context["litefs_settings"] = processed_settings
         litefs_settings = processed_settings
-        
+
         # If enabled becomes True, ensure mount_path is in OPTIONS
-        if processed_settings.get("ENABLED") is True and "litefs_mount_path" not in settings_dict.get("OPTIONS", {}):
+        if processed_settings.get(
+            "ENABLED"
+        ) is True and "litefs_mount_path" not in settings_dict.get("OPTIONS", {}):
             from pathlib import Path
             import tempfile
+
             # Create a temp mount path
             mount_path = Path(tempfile.mkdtemp()) / "litefs"
             mount_path.mkdir(parents=True, exist_ok=True)
@@ -587,9 +597,13 @@ def perform_django_orm_operations(context: dict, datatable, tmp_path: Path) -> N
 
     operations = []
     # Parse datatable (skip header row)
-    start_idx = 1 if len(datatable) > 1 and datatable[0][0].lower() == "operation" else 0
+    start_idx = (
+        1 if len(datatable) > 1 and datatable[0][0].lower() == "operation" else 0
+    )
     for row in datatable[start_idx:]:
-        operations.append({"operation": row[0], "model": row[1] if len(row) > 1 else ""})
+        operations.append(
+            {"operation": row[0], "model": row[1] if len(row) > 1 else ""}
+        )
 
     if litefs_settings is not None:
         with override_settings(LITEFS=litefs_settings):
@@ -606,7 +620,9 @@ def perform_django_orm_operations(context: dict, datatable, tmp_path: Path) -> N
                         cursor.execute("SELECT * FROM users")
                         cursor.fetchall()
                     elif op["operation"] == "update":
-                        cursor.execute("UPDATE users SET name = ? WHERE id = 1", ("updated",))
+                        cursor.execute(
+                            "UPDATE users SET name = ? WHERE id = 1", ("updated",)
+                        )
                     elif op["operation"] == "delete":
                         cursor.execute("DELETE FROM users WHERE id = 1")
                 conn.commit()
@@ -633,7 +649,9 @@ def perform_django_orm_operations(context: dict, datatable, tmp_path: Path) -> N
                         cursor.execute("SELECT * FROM users")
                         cursor.fetchall()
                     elif op["operation"] == "update":
-                        cursor.execute("UPDATE users SET name = ? WHERE id = 1", ("updated",))
+                        cursor.execute(
+                            "UPDATE users SET name = ? WHERE id = 1", ("updated",)
+                        )
                     elif op["operation"] == "delete":
                         cursor.execute("DELETE FROM users WHERE id = 1")
                 conn.commit()
@@ -690,10 +708,14 @@ def litefs_enabled_toggled(context: dict, value1: str, value2: str) -> None:
     for enabled in [enabled1, enabled2]:
         with override_settings(LITEFS={"ENABLED": enabled}):
             try:
-                wrapper = DatabaseWrapper(settings_dict, alias="default")
-                context["toggle_results"].append({"enabled": enabled, "result": "success"})
+                _wrapper = DatabaseWrapper(settings_dict, alias="default")  # noqa: F841
+                context["toggle_results"].append(
+                    {"enabled": enabled, "result": "success"}
+                )
             except Exception as e:
-                context["toggle_results"].append({"enabled": enabled, "result": "error", "error": e})
+                context["toggle_results"].append(
+                    {"enabled": enabled, "result": "error", "error": e}
+                )
 
 
 # =============================================================================
@@ -818,7 +840,6 @@ def no_error_raised(context: dict) -> None:
 @then("database operations should work normally")
 def database_operations_work_normally(context: dict, tmp_path: Path) -> None:
     """Assert that database operations work normally."""
-    import sqlite3
 
     wrapper = context.get("wrapper")
     if wrapper:
@@ -839,7 +860,7 @@ def database_operations_work_normally(context: dict, tmp_path: Path) -> None:
             conn.close()
 
 
-@then(parsers.parse('LiteFS should be {state}'))
+@then(parsers.parse("LiteFS should be {state}"))
 def litefs_should_be(context: dict, state: str) -> None:
     """Assert LiteFS state (enabled/disabled)."""
     assert context.get("initialization_result") == "success", (
@@ -869,4 +890,3 @@ def no_code_changes_required(context: dict) -> None:
     # This is a documentation assertion - the fact that both modes work
     # with the same codebase is verified by the toggle test
     assert context.get("toggle_results") is not None, "Expected toggle results"
-

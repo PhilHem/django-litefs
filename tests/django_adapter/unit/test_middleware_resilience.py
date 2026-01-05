@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import threading
-import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 from django.http import HttpRequest, HttpResponse
 
-from litefs.adapters.ports import ForwardingResult, TimeProvider
+from litefs.adapters.ports import ForwardingResult
 from litefs.domain.circuit_breaker import CircuitBreaker, CircuitBreakerState
 from litefs.domain.retry import RetryPolicy
 
@@ -96,7 +95,7 @@ def create_middleware_with_resilience(
     time_provider: FakeTimeProvider,
     sleeper: FakeSleeper,
     is_primary: bool = False,
-) -> "WriteForwardingMiddleware":
+) -> "WriteForwardingMiddleware":  # noqa: F821
     """Create middleware with injected resilience components."""
     from litefs_django.middleware import WriteForwardingMiddleware
 
@@ -221,7 +220,9 @@ class TestRetryOnTransientErrors:
             ]
         )
         retry_policy = RetryPolicy(max_retries=3, backoff_base=0.1, max_backoff=1.0)
-        circuit_breaker = CircuitBreaker(threshold=10, reset_timeout=30.0)  # High threshold
+        circuit_breaker = CircuitBreaker(
+            threshold=10, reset_timeout=30.0
+        )  # High threshold
         time_provider = FakeTimeProvider()
         sleeper = FakeSleeper()
 

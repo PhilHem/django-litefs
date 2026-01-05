@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import Mock
 
-from litefs.domain.split_brain import RaftNodeState, RaftClusterState
+from litefs.domain.split_brain import RaftNodeState
 from litefs.usecases.split_brain_detector import SplitBrainStatus
 from litefs_django.signals import split_brain_detected
 
@@ -32,7 +32,9 @@ class TestSplitBrainSignals:
         # Create receiver to track signal
         signal_data = []
 
-        def receiver(sender: object, status: SplitBrainStatus, **kwargs: object) -> None:
+        def receiver(
+            sender: object, status: SplitBrainStatus, **kwargs: object
+        ) -> None:
             signal_data.append((sender, status))
 
         split_brain_detected.connect(receiver)
@@ -41,7 +43,9 @@ class TestSplitBrainSignals:
             # Create test status
             leader1 = RaftNodeState(node_id="node1", is_leader=True)
             leader2 = RaftNodeState(node_id="node2", is_leader=True)
-            status = SplitBrainStatus(is_split_brain=True, leader_nodes=[leader1, leader2])
+            status = SplitBrainStatus(
+                is_split_brain=True, leader_nodes=[leader1, leader2]
+            )
 
             # Send signal
             split_brain_detected.send(sender=object(), status=status)
@@ -56,7 +60,9 @@ class TestSplitBrainSignals:
         """Signal should include is_split_brain flag in status."""
         signal_data = []
 
-        def receiver(sender: object, status: SplitBrainStatus, **kwargs: object) -> None:
+        def receiver(
+            sender: object, status: SplitBrainStatus, **kwargs: object
+        ) -> None:
             signal_data.append(status)
 
         split_brain_detected.connect(receiver)
@@ -65,7 +71,9 @@ class TestSplitBrainSignals:
             # Create status with is_split_brain=True
             leader1 = RaftNodeState(node_id="node1", is_leader=True)
             leader2 = RaftNodeState(node_id="node2", is_leader=True)
-            status = SplitBrainStatus(is_split_brain=True, leader_nodes=[leader1, leader2])
+            status = SplitBrainStatus(
+                is_split_brain=True, leader_nodes=[leader1, leader2]
+            )
 
             split_brain_detected.send(sender=object(), status=status)
 
@@ -78,7 +86,9 @@ class TestSplitBrainSignals:
         """Signal should include list of leader nodes."""
         signal_data = []
 
-        def receiver(sender: object, status: SplitBrainStatus, **kwargs: object) -> None:
+        def receiver(
+            sender: object, status: SplitBrainStatus, **kwargs: object
+        ) -> None:
             signal_data.append(status)
 
         split_brain_detected.connect(receiver)
@@ -87,8 +97,10 @@ class TestSplitBrainSignals:
             # Create status with multiple leaders
             leader1 = RaftNodeState(node_id="node1", is_leader=True)
             leader2 = RaftNodeState(node_id="node2", is_leader=True)
-            replica = RaftNodeState(node_id="node3", is_leader=False)
-            status = SplitBrainStatus(is_split_brain=True, leader_nodes=[leader1, leader2])
+            _replica = RaftNodeState(node_id="node3", is_leader=False)  # noqa: F841
+            status = SplitBrainStatus(
+                is_split_brain=True, leader_nodes=[leader1, leader2]
+            )
 
             split_brain_detected.send(sender=object(), status=status)
 
@@ -103,7 +115,9 @@ class TestSplitBrainSignals:
         """Signal should work with healthy (single leader) status."""
         signal_data = []
 
-        def receiver(sender: object, status: SplitBrainStatus, **kwargs: object) -> None:
+        def receiver(
+            sender: object, status: SplitBrainStatus, **kwargs: object
+        ) -> None:
             signal_data.append(status)
 
         split_brain_detected.connect(receiver)
@@ -111,7 +125,7 @@ class TestSplitBrainSignals:
         try:
             # Create status with single leader (healthy)
             leader = RaftNodeState(node_id="node1", is_leader=True)
-            replica = RaftNodeState(node_id="node2", is_leader=False)
+            _replica = RaftNodeState(node_id="node2", is_leader=False)  # noqa: F841
             status = SplitBrainStatus(is_split_brain=False, leader_nodes=[leader])
 
             split_brain_detected.send(sender=object(), status=status)
@@ -126,15 +140,17 @@ class TestSplitBrainSignals:
         """Signal should work with no-leader status (degraded)."""
         signal_data = []
 
-        def receiver(sender: object, status: SplitBrainStatus, **kwargs: object) -> None:
+        def receiver(
+            sender: object, status: SplitBrainStatus, **kwargs: object
+        ) -> None:
             signal_data.append(status)
 
         split_brain_detected.connect(receiver)
 
         try:
             # Create status with no leaders (degraded)
-            replica1 = RaftNodeState(node_id="node1", is_leader=False)
-            replica2 = RaftNodeState(node_id="node2", is_leader=False)
+            _replica1 = RaftNodeState(node_id="node1", is_leader=False)  # noqa: F841
+            _replica2 = RaftNodeState(node_id="node2", is_leader=False)  # noqa: F841
             status = SplitBrainStatus(is_split_brain=False, leader_nodes=[])
 
             split_brain_detected.send(sender=object(), status=status)
@@ -150,10 +166,14 @@ class TestSplitBrainSignals:
         receiver1_data = []
         receiver2_data = []
 
-        def receiver1(sender: object, status: SplitBrainStatus, **kwargs: object) -> None:
+        def receiver1(
+            sender: object, status: SplitBrainStatus, **kwargs: object
+        ) -> None:
             receiver1_data.append(status)
 
-        def receiver2(sender: object, status: SplitBrainStatus, **kwargs: object) -> None:
+        def receiver2(
+            sender: object, status: SplitBrainStatus, **kwargs: object
+        ) -> None:
             receiver2_data.append(status)
 
         split_brain_detected.connect(receiver1)
@@ -163,7 +183,9 @@ class TestSplitBrainSignals:
             # Create and send status
             leader1 = RaftNodeState(node_id="node1", is_leader=True)
             leader2 = RaftNodeState(node_id="node2", is_leader=True)
-            status = SplitBrainStatus(is_split_brain=True, leader_nodes=[leader1, leader2])
+            status = SplitBrainStatus(
+                is_split_brain=True, leader_nodes=[leader1, leader2]
+            )
 
             split_brain_detected.send(sender=object(), status=status)
 
@@ -180,7 +202,9 @@ class TestSplitBrainSignals:
         """Signal should allow different sender objects (must be hashable)."""
         signal_data = []
 
-        def receiver(sender: object, status: SplitBrainStatus, **kwargs: object) -> None:
+        def receiver(
+            sender: object, status: SplitBrainStatus, **kwargs: object
+        ) -> None:
             signal_data.append((sender, status))
 
         split_brain_detected.connect(receiver)
@@ -203,7 +227,9 @@ class TestSplitBrainSignals:
         """Disconnected receiver should not be called again."""
         signal_data = []
 
-        def receiver(sender: object, status: SplitBrainStatus, **kwargs: object) -> None:
+        def receiver(
+            sender: object, status: SplitBrainStatus, **kwargs: object
+        ) -> None:
             signal_data.append(status)
 
         split_brain_detected.connect(receiver)

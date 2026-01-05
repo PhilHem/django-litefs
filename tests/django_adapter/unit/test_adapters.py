@@ -10,7 +10,7 @@ import pytest
 from litefs_django.adapters import StaticLeaderElection
 
 if TYPE_CHECKING:
-    from litefs.usecases.primary_initializer import PrimaryInitializer
+    pass
 
 
 @pytest.mark.unit

@@ -1,11 +1,7 @@
 """Tests for integration test fixtures."""
 
-import inspect
-import os
 import platform
-import subprocess
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -26,7 +22,6 @@ class TestLitefsAvailableFixture:
 
         # Check that os.system() is not called (excluding docstrings/comments)
         # Look for actual function call pattern: os.system(
-        import re
 
         # Find all os.system( calls (not in strings/comments)
         # Filter out docstring occurrences by checking if line contains """

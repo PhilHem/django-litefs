@@ -1,7 +1,7 @@
 """Unit tests for Django split-brain detection middleware."""
 
 import pytest
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 from django.http import HttpResponse, HttpRequest
 from django.test import RequestFactory
 

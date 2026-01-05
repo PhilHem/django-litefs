@@ -6,9 +6,9 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningError
+from litefs.usecases.primary_detector import PrimaryDetector
 from litefs.usecases.split_brain_detector import SplitBrainDetector, SplitBrainStatus
-from litefs.domain.split_brain import RaftNodeState, RaftClusterState
+from litefs.domain.split_brain import RaftNodeState
 from litefs_django.db.backends.litefs.base import DatabaseWrapper, LiteFSCursor
 from litefs_django.exceptions import NotPrimaryError, SplitBrainError
 from .conftest import create_litefs_settings_dict
@@ -106,7 +106,7 @@ class TestDatabaseBackend:
         with tempfile.TemporaryDirectory() as tmpdir:
             mount_path = Path(tmpdir) / "litefs"
             mount_path.mkdir()
-            db_file = mount_path / "test.db"
+            _db_file = mount_path / "test.db"  # noqa: F841
 
             settings_dict = {
                 "ENGINE": "litefs_django.db.backends.litefs",
@@ -142,7 +142,6 @@ class TestDatabaseBackend:
             wrapper = DatabaseWrapper(settings_dict)
 
             # Write operation should check primary
-            from litefs_django.exceptions import NotPrimaryError
 
             # Mock cursor execute to test primary check
             with patch.object(
@@ -168,7 +167,6 @@ class TestDatabaseBackend:
             }
 
             wrapper = DatabaseWrapper(settings_dict)
-            from litefs_django.exceptions import NotPrimaryError
 
             # When primary detector returns False, write should fail
             with patch.object(
@@ -184,15 +182,13 @@ class TestDatabaseBackend:
         BEGIN IMMEDIATE for autocommit transactions, @transaction.atomic, and
         transaction.atomic() context manager.
         """
-        import sqlite3
         import tempfile
         from pathlib import Path
-        from unittest.mock import patch
 
         with tempfile.TemporaryDirectory() as tmpdir:
             mount_path = Path(tmpdir) / "litefs"
             mount_path.mkdir()
-            db_path = mount_path / "test.db"
+            _db_path = mount_path / "test.db"  # noqa: F841
 
             # Create primary file to allow writes
             (mount_path / ".primary").write_text("node-1")
@@ -507,7 +503,7 @@ class TestSplitBrainDetectionInCursor:
     def test_split_brain_check_before_primary_on_execute(self):
         """Test that split-brain is checked BEFORE primary status on execute()."""
         import sqlite3
-        from unittest.mock import Mock, call
+        from unittest.mock import Mock
 
         # Create real in-memory SQLite connection
         connection = sqlite3.connect(":memory:")
@@ -604,7 +600,9 @@ class TestSplitBrainDetectionInCursor:
 
             # Executemany write should raise SplitBrainError
             with pytest.raises(SplitBrainError) as exc_info:
-                cursor.executemany("INSERT INTO users VALUES (?, ?)", [("Alice", 1), ("Bob", 2)])
+                cursor.executemany(
+                    "INSERT INTO users VALUES (?, ?)", [("Alice", 1), ("Bob", 2)]
+                )
 
             assert "split" in str(exc_info.value).lower()
         finally:
@@ -637,7 +635,9 @@ class TestSplitBrainDetectionInCursor:
 
             # Executescript should raise SplitBrainError
             with pytest.raises(SplitBrainError) as exc_info:
-                cursor.executescript("CREATE TABLE test (id INT); INSERT INTO test VALUES (1);")
+                cursor.executescript(
+                    "CREATE TABLE test (id INT); INSERT INTO test VALUES (1);"
+                )
 
             assert "split" in str(exc_info.value).lower()
         finally:
@@ -706,7 +706,9 @@ class TestSplitBrainDetectionInCursor:
             )
 
             # Mock parent execute to avoid actual SQLite calls
-            with patch.object(type(cursor).__bases__[0], "execute", return_value=cursor):
+            with patch.object(
+                type(cursor).__bases__[0], "execute", return_value=cursor
+            ):
                 # Read operation should NOT call split-brain detector
                 cursor.execute("SELECT * FROM users")
 
@@ -864,7 +866,9 @@ class TestDevMode:
                     RaftNodeState(node_id="node-2", is_leader=True),
                 ],
             )
-            mock_split_brain_detector.detect_split_brain.return_value = split_brain_status
+            mock_split_brain_detector.detect_split_brain.return_value = (
+                split_brain_status
+            )
 
             mock_primary_detector = Mock()
             mock_primary_detector.is_primary.return_value = True
@@ -981,7 +985,9 @@ class TestDevMode:
                     RaftNodeState(node_id="node-2", is_leader=True),
                 ],
             )
-            mock_split_brain_detector.detect_split_brain.return_value = split_brain_status
+            mock_split_brain_detector.detect_split_brain.return_value = (
+                split_brain_status
+            )
 
             # Create cursor in dev mode
             cursor = LiteFSCursor(

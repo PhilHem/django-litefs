@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 from unittest.mock import Mock, patch
 
 import pytest
-from django.http import HttpRequest
 from django.test import RequestFactory
 
 from litefs.domain.health import HealthStatus, LivenessResult, ReadinessResult

@@ -1,7 +1,6 @@
 """Tests for the example Django app to validate it can be instantiated and configured."""
 
 import os
-import django
 from pathlib import Path
 
 

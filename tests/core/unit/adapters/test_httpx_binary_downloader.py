@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING
 from unittest.mock import Mock, patch
 
 import httpx
@@ -16,7 +15,6 @@ from litefs.adapters.ports import BinaryDownloaderPort
 from litefs.domain.binary import (
     BinaryMetadata,
     BinaryVersion,
-    BinaryLocation,
     Platform,
 )
 

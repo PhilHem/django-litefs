@@ -1,13 +1,11 @@
 """Unit tests for ReadinessChecker use case."""
 
 import pytest
-from unittest.mock import Mock
 
 from litefs.usecases.readiness_checker import ReadinessChecker
-from litefs.usecases.health_checker import HealthChecker
-from litefs.usecases.failover_coordinator import FailoverCoordinator, NodeState
-from litefs.usecases.split_brain_detector import SplitBrainDetector, SplitBrainStatus
-from litefs.domain.health import HealthStatus, ReadinessResult
+from litefs.usecases.failover_coordinator import NodeState
+from litefs.usecases.split_brain_detector import SplitBrainStatus
+from litefs.domain.health import HealthStatus
 from litefs.domain.split_brain import RaftNodeState
 
 

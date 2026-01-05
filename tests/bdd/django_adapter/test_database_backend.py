@@ -24,16 +24,16 @@ _project_root = Path(__file__).parent.parent.parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-from litefs.domain.exceptions import LiteFSConfigError
-from litefs.usecases.primary_detector import LiteFSNotRunningError
-from litefs.usecases.split_brain_detector import SplitBrainDetector
-from litefs_django.db.backends.litefs.base import DatabaseWrapper, LiteFSCursor
-from litefs_django.exceptions import NotPrimaryError, SplitBrainError
-from tests.bdd.django_adapter.conftest import (
+from litefs.domain.exceptions import LiteFSConfigError  # noqa: E402
+from litefs.usecases.primary_detector import LiteFSNotRunningError  # noqa: E402
+from litefs.usecases.split_brain_detector import SplitBrainDetector  # noqa: E402
+from litefs_django.db.backends.litefs.base import DatabaseWrapper, LiteFSCursor  # noqa: E402
+from litefs_django.exceptions import NotPrimaryError, SplitBrainError  # noqa: E402
+from tests.bdd.django_adapter.conftest import (  # noqa: E402
     create_healthy_cluster,
     create_split_brain_cluster,
 )
-from tests.django_adapter.unit.fakes import FakePrimaryDetector, FakeSplitBrainDetector
+from tests.django_adapter.unit.fakes import FakePrimaryDetector, FakeSplitBrainDetector  # noqa: E402
 
 if TYPE_CHECKING:
     pass
@@ -376,7 +376,9 @@ def db_config_with_table(context: dict, datatable, tmp_path: Path):
 
 
 @given("the mount path exists but is not accessible")
-def mount_path_not_accessible(context: dict, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def mount_path_not_accessible(
+    context: dict, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     """Set up mount path that exists but is not accessible.
 
     Since MountValidator doesn't check accessibility (only existence),
@@ -393,9 +395,7 @@ def mount_path_not_accessible(context: dict, tmp_path: Path, monkeypatch: pytest
     # Mock MountValidator.validate to raise error for "not accessible"
     def mock_validate(self, mount_path: Path) -> None:
         if str(mount_path) == str(actual_mount):
-            raise LiteFSConfigError(
-                f"Mount path is not accessible: {mount_path}"
-            )
+            raise LiteFSConfigError(f"Mount path is not accessible: {mount_path}")
 
     monkeypatch.setattr(MountValidator, "validate", mock_validate)
     context["mock_inaccessible"] = True
@@ -433,7 +433,9 @@ def create_database_connection(
     # set up a temp directory. This handles scenarios like WAL mode that don't
     # have explicit "mount path exists" step but need connection to succeed.
     # Skip if expect_mount_failure is set (e.g., "mount path does not exist" step).
-    if context.get("actual_mount_path") is None and not context.get("expect_mount_failure"):
+    if context.get("actual_mount_path") is None and not context.get(
+        "expect_mount_failure"
+    ):
         # Check if the configured mount path is the test placeholder
         options = settings_dict.get("OPTIONS", {})
         mount_path = options.get("litefs_mount_path", "")
@@ -696,7 +698,7 @@ def error_contains_text(context: dict, text: str):
 def not_primary_error_not_raised(context: dict):
     """Assert that NotPrimaryError was NOT raised (SplitBrainError takes precedence)."""
     assert context["error_type"] != "NotPrimaryError", (
-        f"NotPrimaryError was raised but SplitBrainError should take precedence"
+        "NotPrimaryError was raised but SplitBrainError should take precedence"
     )
 
 

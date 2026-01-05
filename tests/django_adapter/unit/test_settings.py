@@ -2,7 +2,6 @@
 
 import pytest
 from hypothesis import given, strategies as st
-from unittest.mock import patch
 
 from litefs.domain.settings import LiteFSSettings, StaticLeaderConfig, ForwardingSettings, LiteFSConfigError
 from litefs_django.settings import get_litefs_settings, is_dev_mode

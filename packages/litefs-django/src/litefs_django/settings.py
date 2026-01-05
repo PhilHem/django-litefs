@@ -161,3 +161,6 @@ def is_dev_mode(django_settings: dict[str, Any] | None) -> bool:
     # If ENABLED key exists and is False, we're in dev mode
     # If ENABLED key doesn't exist or is True, we're in production mode
     return django_settings.get("ENABLED", True) is False
+
+
+

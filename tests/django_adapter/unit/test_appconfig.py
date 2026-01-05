@@ -2,11 +2,9 @@
 
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock, Mock
+from unittest.mock import patch, MagicMock
 
 import pytest
-from django.apps import AppConfig
-from django.core.exceptions import ImproperlyConfigured
 
 import litefs_django
 from litefs_django.apps import LiteFSDjangoConfig
@@ -51,7 +49,7 @@ class TestAppConfig:
             mount_path = Path(tmpdir) / "nonexistent"
             # Path doesn't exist
 
-            config = LiteFSDjangoConfig("litefs_django", litefs_django)
+            _config = LiteFSDjangoConfig("litefs_django", litefs_django)  # noqa: F841
 
             with patch("litefs_django.apps.django_settings") as mock_settings:
                 mock_settings.LITEFS = {
@@ -118,7 +116,9 @@ class TestAppConfig:
             # Create mock initializer
             mock_initializer = MagicMock()
             mock_initializer.is_primary = MagicMock(return_value=True)
-            config.primary_initializer_factory = MagicMock(return_value=mock_initializer)
+            config.primary_initializer_factory = MagicMock(
+                return_value=mock_initializer
+            )
 
             with patch("litefs_django.apps.django_settings") as mock_settings:
                 mock_settings.LITEFS = {
@@ -158,7 +158,9 @@ class TestAppConfig:
             # Create mock initializer
             mock_initializer = MagicMock()
             mock_initializer.is_primary = MagicMock(return_value=True)
-            config.primary_initializer_factory = MagicMock(return_value=mock_initializer)
+            config.primary_initializer_factory = MagicMock(
+                return_value=mock_initializer
+            )
 
             with patch("litefs_django.apps.django_settings") as mock_settings:
                 mock_settings.LITEFS = {

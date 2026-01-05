@@ -6,7 +6,7 @@ and response passthrough per BDD specs in forwarding_core.feature.
 
 from __future__ import annotations
 
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 from typing import TYPE_CHECKING
 
 import pytest
@@ -145,7 +145,7 @@ class TestReadMethodsNotForwarded:
         else:
             request = getattr(request_factory, method.lower())("/api/resource")
 
-        response = middleware(request)
+        _response = middleware(request)  # noqa: F841
 
         # Should NOT forward
         mock_forwarding_port.forward_request.assert_not_called()
@@ -173,7 +173,7 @@ class TestPrimaryHandlesLocally:
 
         request = request_factory.post("/api/resource")
 
-        response = middleware(request)
+        _response = middleware(request)  # noqa: F841
 
         # Should NOT forward (we are primary)
         mock_forwarding_port.forward_request.assert_not_called()
@@ -214,7 +214,9 @@ class TestHeaderPreservation:
         middleware(request)
 
         call_args = mock_forwarding_port.forward_request.call_args
-        headers = call_args.kwargs.get("headers", call_args[0][3] if len(call_args[0]) > 3 else {})
+        headers = call_args.kwargs.get(
+            "headers", call_args[0][3] if len(call_args[0]) > 3 else {}
+        )
 
         assert "Authorization" in headers or "authorization" in headers.keys()
         assert "Content-Type" in headers or "content-type" in headers.keys()
@@ -271,7 +273,9 @@ class TestXForwardedHeaders:
         middleware(request)
 
         call_args = mock_forwarding_port.forward_request.call_args
-        headers = call_args.kwargs.get("headers", call_args[0][3] if len(call_args[0]) > 3 else {})
+        headers = call_args.kwargs.get(
+            "headers", call_args[0][3] if len(call_args[0]) > 3 else {}
+        )
 
         assert "X-Forwarded-For" in headers
         assert "192.168.1.100" in headers["X-Forwarded-For"]
@@ -299,7 +303,9 @@ class TestXForwardedHeaders:
         middleware(request)
 
         call_args = mock_forwarding_port.forward_request.call_args
-        headers = call_args.kwargs.get("headers", call_args[0][3] if len(call_args[0]) > 3 else {})
+        headers = call_args.kwargs.get(
+            "headers", call_args[0][3] if len(call_args[0]) > 3 else {}
+        )
 
         assert "X-Forwarded-For" in headers
         assert "10.0.0.1" in headers["X-Forwarded-For"]
@@ -339,7 +345,9 @@ class TestBodyPreservation:
         middleware(request)
 
         call_args = mock_forwarding_port.forward_request.call_args
-        forwarded_body = call_args.kwargs.get("body", call_args[0][4] if len(call_args[0]) > 4 else None)
+        forwarded_body = call_args.kwargs.get(
+            "body", call_args[0][4] if len(call_args[0]) > 4 else None
+        )
 
         assert forwarded_body == body
 
@@ -362,7 +370,9 @@ class TestBodyPreservation:
         middleware(request)
 
         call_args = mock_forwarding_port.forward_request.call_args
-        query_string = call_args.kwargs.get("query_string", call_args[0][5] if len(call_args[0]) > 5 else "")
+        query_string = call_args.kwargs.get(
+            "query_string", call_args[0][5] if len(call_args[0]) > 5 else ""
+        )
 
         assert "page=1" in query_string
         assert "filter=active" in query_string
@@ -600,7 +610,7 @@ class TestForwardingConfiguration:
         )
 
         request = request_factory.post("/api/resource")
-        response = middleware(request)
+        _response = middleware(request)  # noqa: F841
 
         # get_response should be called (no forwarding)
         mock_get_response.assert_called_once_with(request)
@@ -621,7 +631,7 @@ class TestForwardingConfiguration:
         )
 
         request = request_factory.post("/health")
-        response = middleware(request)
+        _response = middleware(request)  # noqa: F841
 
         # Should NOT forward (excluded path)
         mock_forwarding_port.forward_request.assert_not_called()

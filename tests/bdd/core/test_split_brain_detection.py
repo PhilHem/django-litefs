@@ -3,12 +3,10 @@
 import pytest
 from dataclasses import FrozenInstanceError
 from pytest_bdd import scenario, given, when, then, parsers
-from unittest.mock import Mock
 
 from litefs.domain.split_brain import RaftNodeState, RaftClusterState
 from litefs.domain.exceptions import LiteFSConfigError
 from litefs.usecases.split_brain_detector import SplitBrainDetector, SplitBrainStatus
-from litefs.adapters.ports import SplitBrainDetectorPort
 
 
 # ---------------------------------------------------------------------------

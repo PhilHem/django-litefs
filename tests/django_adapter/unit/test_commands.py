@@ -5,12 +5,11 @@ from contextlib import contextmanager
 from io import StringIO
 from pathlib import Path
 from typing import Iterator
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
-from django.core.management import call_command
 from django.core.management.base import CommandError
 
-from litefs.domain.settings import LiteFSSettings, StaticLeaderConfig
+from litefs.domain.settings import LiteFSSettings
 from litefs.usecases.primary_detector import LiteFSNotRunningError
 from litefs.usecases.installation_checker import (
     InstallationCheckResult,
@@ -71,7 +70,9 @@ def mock_litefs_check_dependencies(
     else:
         mock_install_result = InstallationCheckResult(
             status=binary_status,
-            binary_path=binary_path if binary_status != InstallationStatus.MISSING else None,
+            binary_path=binary_path
+            if binary_status != InstallationStatus.MISSING
+            else None,
             error_message=f"Binary issue: {binary_status.value}",
         )
 
@@ -95,12 +96,13 @@ def mock_litefs_check_dependencies(
         ),
     }
 
-    with patches["get_settings"] as mock_get_settings, \
-         patches["django_settings"], \
-         patches["detector"] as mock_detector_class, \
-         patches["resolver"] as mock_resolver_class, \
-         patches["checker"] as mock_checker_class:
-
+    with (
+        patches["get_settings"] as mock_get_settings,
+        patches["django_settings"],
+        patches["detector"] as mock_detector_class,
+        patches["resolver"] as mock_resolver_class,
+        patches["checker"] as mock_checker_class,
+    ):
         mock_get_settings.return_value = settings
 
         detector = Mock()
@@ -477,7 +479,7 @@ class TestLiteFSCheckCommand:
                     mock_detector_class.return_value = detector
 
                     cmd.handle()
-                    output = out.getvalue()
+                    _output = out.getvalue()  # noqa: F841
 
                     # Should produce some output indicating checks were performed
                     # (could be informational or verbose output)
@@ -952,9 +954,7 @@ class TestVerbosityLevels:
 
             # Verbosity 1 should show success message
             assert (
-                "passed" in output.lower()
-                or "ok" in output.lower()
-                or len(output) > 0
+                "passed" in output.lower() or "ok" in output.lower() or len(output) > 0
             )
 
     def test_check_verbosity_2_shows_check_steps(self) -> None:
@@ -1421,7 +1421,7 @@ class TestLiteFSDownloadCommand:
             ) as mock_downloader_class:
                 with patch(
                     "litefs_django.management.commands.litefs_download.HttpxBinaryDownloader"
-                ) as mock_httpx_class:
+                ):  # noqa: F841
                     with patch(
                         "litefs_django.management.commands.litefs_download.FilesystemBinaryResolver"
                     ) as mock_resolver_class:

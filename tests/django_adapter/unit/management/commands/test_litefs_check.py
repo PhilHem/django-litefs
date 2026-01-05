@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from io import StringIO
 from pathlib import Path
-from typing import Any
 from unittest.mock import Mock, patch
 import json
 

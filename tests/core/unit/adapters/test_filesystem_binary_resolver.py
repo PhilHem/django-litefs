@@ -4,14 +4,12 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Callable
 from unittest.mock import patch
 
 import pytest
 
 from litefs.adapters.filesystem_binary_resolver import FilesystemBinaryResolver
 from litefs.adapters.ports import BinaryResolverPort
-from litefs.domain.binary import BinaryLocation
 
 
 @pytest.mark.tier(1)

@@ -1,7 +1,7 @@
 """Step definitions for SQL write operation detection feature."""
 
 import pytest
-from pytest_bdd import scenario, given, when, then, parsers
+from pytest_bdd import scenario, when, then, parsers
 
 from litefs.usecases.sql_detector import SQLDetector
 

@@ -1,7 +1,6 @@
 """Unit tests for PrimaryDetector use case."""
 
 import pytest
-from pathlib import Path
 
 from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningError
 

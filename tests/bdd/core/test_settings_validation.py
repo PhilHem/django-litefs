@@ -1,7 +1,7 @@
 """Step definitions for settings domain validation feature."""
 
 import pytest
-from pytest_bdd import scenario, given, when, then, parsers
+from pytest_bdd import scenario, given, then, parsers
 
 from litefs.domain.settings import LiteFSSettings
 from litefs.domain.exceptions import LiteFSConfigError

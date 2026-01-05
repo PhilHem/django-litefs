@@ -3,7 +3,6 @@
 import sqlite3
 import threading
 import time
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -32,7 +31,7 @@ def create_litefs_settings_dict(mount_path, db_name="test.db"):
 
 # Import SQLDetector to test thread safety
 # This avoids needing full Django setup for this specific test
-from litefs.usecases.sql_detector import SQLDetector
+from litefs.usecases.sql_detector import SQLDetector  # noqa: E402
 
 # Create a module-level detector instance for thread safety testing
 _sql_detector = SQLDetector()
@@ -404,7 +403,9 @@ class TestDatabaseBackendConcurrency:
                 # Create mock connection and cursor
                 mock_cursor = MagicMock()
                 mock_cursor.execute = lambda sql: thread_statements.append(sql)
-                mock_cursor.fetchone = lambda: ("WAL",)  # Mock PRAGMA journal_mode result
+                mock_cursor.fetchone = lambda: (
+                    "WAL",
+                )  # Mock PRAGMA journal_mode result
 
                 mock_conn = MagicMock()
                 mock_conn.cursor.return_value = mock_cursor
@@ -558,7 +559,7 @@ class TestDatabaseBackendConcurrency:
         primary_file.write_text("node-1")
 
         # Import Django components (Django should be set up by conftest.py)
-        from litefs_django.db.backends.litefs.base import DatabaseWrapper, LiteFSCursor
+        from litefs_django.db.backends.litefs.base import DatabaseWrapper
 
         settings_dict = create_litefs_settings_dict(mount_path)
 
@@ -608,11 +609,9 @@ class TestDatabaseBackendConcurrency:
                 # If we get here, the write succeeded (failover didn't happen in time)
                 # This is acceptable - TOCTOU gap is probabilistic
                 write_succeeded = True
-            except (sqlite3.OperationalError, Exception) as e:
+            except (sqlite3.OperationalError, Exception):
                 # SQLite rejected the write (expected if failover occurred)
                 write_succeeded = False
-                error_type = type(e).__name__
-                error_message = str(e)
 
             failover_thread.join()
 
@@ -625,6 +624,7 @@ class TestDatabaseBackendConcurrency:
 
     def test_error_type_on_replica_write_attempt(self, tmp_path, django_settings_reset):
         from django.conf import settings
+
         settings.LITEFS = {"ENABLED": True}
         """Test error type when write is attempted on replica (DJANGO-023).
 
@@ -665,8 +665,11 @@ class TestDatabaseBackendConcurrency:
             or "primary" in str(exc_info.value).lower()
         ), f"Error message should mention replica/primary: {exc_info.value}"
 
-    def test_error_after_failover_is_sqlite_operational_error(self, tmp_path, django_settings_reset):
+    def test_error_after_failover_is_sqlite_operational_error(
+        self, tmp_path, django_settings_reset
+    ):
         from django.conf import settings
+
         settings.LITEFS = {"ENABLED": True}
         """Test error type when TOCTOU gap allows write to reach SQLite on replica (DJANGO-023).
 
@@ -690,7 +693,7 @@ class TestDatabaseBackendConcurrency:
         primary_file.write_text("node-1")
 
         # Import Django components (Django should be set up by conftest.py)
-        from litefs_django.db.backends.litefs.base import DatabaseWrapper, LiteFSCursor
+        from litefs_django.db.backends.litefs.base import DatabaseWrapper
         from django.db import DatabaseError
 
         settings_dict = create_litefs_settings_dict(mount_path)
@@ -745,8 +748,11 @@ class TestDatabaseBackendConcurrency:
                 or "read only" in error_message.lower()
             ), f"Error message should indicate readonly: {error_message}"
 
-    def test_concurrent_connection_init_mount_path_missing(self, tmp_path, django_settings_reset):
+    def test_concurrent_connection_init_mount_path_missing(
+        self, tmp_path, django_settings_reset
+    ):
         from django.conf import settings
+
         settings.LITEFS = {"ENABLED": True}
         """Test concurrent DatabaseWrapper creation when mount_path doesn't exist (DJANGO-005, DJANGO-025, DJANGO-026, DJANGO-027).
 
@@ -835,7 +841,7 @@ class TestDatabaseBackendConcurrency:
         from litefs.usecases.primary_detector import LiteFSNotRunningError
 
         mount_path = tmp_path / "litefs"
-        db_path = mount_path / "test.db"
+        _db_path = mount_path / "test.db"  # noqa: F841
 
         settings_dict = create_litefs_settings_dict(mount_path)
 
@@ -851,7 +857,7 @@ class TestDatabaseBackendConcurrency:
                 time.sleep(0.05)
                 # Attempt wrapper creation
                 # May fail if mount_path doesn't exist yet (DJANGO-027), or succeed if it does
-                wrapper = DatabaseWrapper(settings_dict.copy())
+                _wrapper = DatabaseWrapper(settings_dict.copy())  # noqa: F841
                 with lock:
                     results.append(thread_id)
             except LiteFSNotRunningError:
@@ -898,8 +904,11 @@ class TestDatabaseBackendConcurrency:
             f"Not all threads completed: {len(results)} succeeded, {len(errors)} failed"
         )
 
-    def test_primary_detector_created_before_mount_path_check(self, tmp_path, django_settings_reset):
+    def test_primary_detector_created_before_mount_path_check(
+        self, tmp_path, django_settings_reset
+    ):
         from django.conf import settings
+
         settings.LITEFS = {"ENABLED": True}
         """Test that PrimaryDetector creation validates mount_path exists (fail-fast) (DJANGO-027).
 
@@ -917,7 +926,7 @@ class TestDatabaseBackendConcurrency:
         # DatabaseWrapper.__init__ should validate mount_path exists (fail-fast)
         # This test verifies that validation happens early in __init__
         with pytest.raises(LiteFSNotRunningError) as exc_info:
-            wrapper = DatabaseWrapper(settings_dict)
+            _wrapper = DatabaseWrapper(settings_dict)  # noqa: F841
 
         # Verify error message mentions mount path
         assert (
@@ -925,8 +934,11 @@ class TestDatabaseBackendConcurrency:
             or "does not exist" in str(exc_info.value).lower()
         ), f"Error message should mention mount path: {exc_info.value}"
 
-    def test_get_new_connection_error_handling_missing_path(self, tmp_path, django_settings_reset):
+    def test_get_new_connection_error_handling_missing_path(
+        self, tmp_path, django_settings_reset
+    ):
         from django.conf import settings
+
         settings.LITEFS = {"ENABLED": True}
         """Test error handling in get_new_connection when mount_path is missing (DJANGO-025).
 
@@ -1218,8 +1230,11 @@ class TestWriteDetectionGaps:
 class TestExecutescriptOverride:
     """Test executescript method override (DJANGO-028)."""
 
-    def test_executescript_checks_primary_on_replica(self, tmp_path, django_settings_reset):
+    def test_executescript_checks_primary_on_replica(
+        self, tmp_path, django_settings_reset
+    ):
         from django.conf import settings
+
         settings.LITEFS = {"ENABLED": True}
         """Test executescript raises NotPrimaryError on replica (DJANGO-028)."""
         from litefs_django.db.backends.litefs.base import DatabaseWrapper
@@ -1258,6 +1273,7 @@ class TestExecutescriptOverride:
 
     def test_executescript_works_on_primary(self, tmp_path, django_settings_reset):
         from django.conf import settings
+
         settings.LITEFS = {"ENABLED": True}
         """Test executescript works on primary node (DJANGO-028)."""
         from litefs_django.db.backends.litefs.base import DatabaseWrapper
@@ -1298,8 +1314,11 @@ class TestExecutescriptOverride:
 class TestPrimaryDetectorLifecycle:
     """Test PrimaryDetector lifecycle across cursor operations (DJANGO-032)."""
 
-    def test_shared_primary_detector_safe_across_cursor_lifecycle(self, tmp_path, django_settings_reset):
+    def test_shared_primary_detector_safe_across_cursor_lifecycle(
+        self, tmp_path, django_settings_reset
+    ):
         from django.conf import settings
+
         settings.LITEFS = {"ENABLED": True}
         """Test shared PrimaryDetector remains valid across cursor lifecycle (DJANGO-032)."""
         from litefs_django.db.backends.litefs.base import DatabaseWrapper
@@ -1342,8 +1361,11 @@ class TestPrimaryDetectorLifecycle:
         result = cursor1.execute("SELECT COUNT(*) FROM test_table").fetchone()
         assert result[0] == 2
 
-    def test_detector_remains_valid_after_failover(self, tmp_path, django_settings_reset):
+    def test_detector_remains_valid_after_failover(
+        self, tmp_path, django_settings_reset
+    ):
         from django.conf import settings
+
         settings.LITEFS = {"ENABLED": True}
         """Test detector handles failover correctly across cursors (DJANGO-032)."""
         from litefs_django.db.backends.litefs.base import DatabaseWrapper

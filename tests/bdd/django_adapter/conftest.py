@@ -6,7 +6,6 @@ import sqlite3
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
-from unittest.mock import Mock
 
 import pytest
 
@@ -15,12 +14,11 @@ _project_root = Path(__file__).parent.parent.parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-from litefs.domain.split_brain import RaftClusterState, RaftNodeState
-from litefs.usecases.split_brain_detector import SplitBrainDetector
-from tests.django_adapter.unit.fakes import FakePrimaryDetector, FakeSplitBrainDetector
+from litefs.domain.split_brain import RaftClusterState, RaftNodeState  # noqa: E402
+from tests.django_adapter.unit.fakes import FakePrimaryDetector, FakeSplitBrainDetector  # noqa: E402
 
 if TYPE_CHECKING:
-    from litefs_django.db.backends.litefs.base import LiteFSCursor
+    pass
 
 
 @pytest.fixture
@@ -65,7 +63,7 @@ def create_split_brain_cluster(leader_count: int) -> RaftClusterState:
     nodes = []
     for i in range(max(leader_count, 3)):
         is_leader = i < leader_count
-        nodes.append(RaftNodeState(node_id=f"node{i+1}", is_leader=is_leader))
+        nodes.append(RaftNodeState(node_id=f"node{i + 1}", is_leader=is_leader))
     return RaftClusterState(nodes=nodes)
 
 

@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from pytest_bdd import given, parsers, scenario, then, when
 
-import httpx
 
 # Add project root to path for cross-package imports
 _project_root = Path(__file__).parent.parent.parent.parent
