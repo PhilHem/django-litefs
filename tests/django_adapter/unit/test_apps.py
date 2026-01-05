@@ -25,7 +25,7 @@ def create_test_config():
 
 
 @pytest.mark.tier(1)
-@pytest.mark.tra("Adapter")
+@pytest.mark.tra("Adapter.AppConfig")
 class TestLiteFSDjangoConfigReady:
     """Test LiteFSDjangoConfig.ready() method for primary initialization."""
 
