@@ -435,3 +435,158 @@ class FakePrimaryMarkerWriter:
             content: Initial content, or None to clear.
         """
         self._content = content
+
+
+class FakeMountValidator:
+    """In-memory fake for MountValidator - no filesystem access.
+
+    Use this instead of mocking MountValidator in unit tests for:
+    - Faster test execution (no filesystem I/O)
+    - Cleaner test code (no mock.patch boilerplate)
+    - Error injection (simulate mount validation failures)
+
+    Example:
+        def test_mount_validation_failure(fake_mount_validator):
+            fake_mount_validator.set_error(Exception("Mount not found"))
+            # Test code that calls validator.validate()
+    """
+
+    def __init__(self) -> None:
+        """Initialize with no errors (validation passes)."""
+        self._error: Exception | None = None
+
+    def validate(self, path: "Path") -> None:
+        """Validate mount path or raise configured error.
+
+        Args:
+            path: Mount path to validate (ignored in fake).
+
+        Raises:
+            Exception: If error was set via set_error().
+        """
+        if self._error:
+            raise self._error
+
+    def set_error(self, error: Exception | None) -> None:
+        """Set error to raise on next validate() call.
+
+        Args:
+            error: Exception to raise, or None to clear.
+        """
+        self._error = error
+
+
+class FakeNodeIDResolver:
+    """In-memory fake for NodeIDResolver - no environment access.
+
+    Use this instead of mocking NodeIDResolver in unit tests for:
+    - Faster test execution (no environment variable access)
+    - Cleaner test code (no mock.patch boilerplate)
+    - Stateful testing (configure node ID during test)
+    - Error injection (simulate missing LITEFS_NODE_ID)
+
+    Example:
+        def test_primary_detection(fake_node_id_resolver):
+            fake_node_id_resolver.set_node_id("primary-node")
+            resolver = fake_node_id_resolver
+            assert resolver.resolve_node_id() == "primary-node"
+    """
+
+    def __init__(self, node_id: str = "test-node") -> None:
+        """Initialize with default node ID.
+
+        Args:
+            node_id: Initial node ID to return.
+        """
+        self._node_id = node_id
+        self._error: Exception | None = None
+
+    def resolve_node_id(self) -> str:
+        """Return configured node ID or raise configured error.
+
+        Returns:
+            The configured node ID.
+
+        Raises:
+            Exception: If error was set via set_error().
+        """
+        if self._error:
+            raise self._error
+        return self._node_id
+
+    def set_node_id(self, node_id: str) -> None:
+        """Set node ID for testing.
+
+        Args:
+            node_id: New node ID to return.
+        """
+        self._node_id = node_id
+
+    def set_error(self, error: Exception | None) -> None:
+        """Set error to raise on next resolve_node_id() call.
+
+        Args:
+            error: Exception to raise, or None to clear.
+        """
+        self._error = error
+
+    def set_missing_node_id(self) -> None:
+        """Simulate missing LITEFS_NODE_ID environment variable.
+
+        After calling this, resolve_node_id() will raise KeyError.
+        """
+        self._error = KeyError("LITEFS_NODE_ID")
+
+    def set_invalid_node_id(self) -> None:
+        """Simulate invalid (empty) LITEFS_NODE_ID.
+
+        After calling this, resolve_node_id() will raise ValueError.
+        """
+        self._error = ValueError("node ID cannot be empty")
+
+
+class FakePrimaryInitializer:
+    """In-memory fake for PrimaryInitializer - no dependencies.
+
+    Use this instead of mocking PrimaryInitializer in unit tests for:
+    - Faster test execution (no dependency chain)
+    - Cleaner test code (no mock.patch boilerplate)
+    - Stateful testing (toggle primary status during test)
+
+    Example:
+        def test_static_mode_primary(fake_primary_initializer):
+            fake_primary_initializer.set_primary(True)
+            assert fake_primary_initializer.is_primary("any-node") is True
+    """
+
+    def __init__(
+        self, static_leader_config: "Any" = None, *, is_primary: bool = True
+    ) -> None:
+        """Initialize with desired primary state.
+
+        Args:
+            static_leader_config: Ignored. Accepted for signature compatibility
+                with PrimaryInitializer.
+            is_primary: Initial primary state (default True).
+        """
+        # static_leader_config is ignored - we're an in-memory fake
+        self._is_primary = is_primary
+
+    def is_primary(self, node_id: str) -> bool:
+        """Return configured primary state.
+
+        Args:
+            node_id: Node ID to check (ignored in fake).
+
+        Returns:
+            True if configured as primary, False otherwise.
+        """
+        return self._is_primary
+
+    def set_primary(self, is_primary: bool) -> None:
+        """Set primary state for testing.
+
+        Args:
+            is_primary: New primary state.
+        """
+        self._is_primary = is_primary

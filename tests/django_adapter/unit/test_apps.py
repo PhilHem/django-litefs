@@ -1,14 +1,20 @@
 """Unit tests for LiteFSDjangoConfig AppConfig."""
 
 import logging
-from unittest.mock import patch, MagicMock, Mock
+from unittest.mock import patch, Mock
 
 import pytest
 
 from litefs.domain.settings import LiteFSSettings, StaticLeaderConfig
 from litefs.usecases.primary_detector import LiteFSNotRunningError
 from litefs_django.apps import LiteFSDjangoConfig
-from .fakes import FakePrimaryMarkerWriter
+from .fakes import (
+    FakeMountValidator,
+    FakeNodeIDResolver,
+    FakePrimaryDetector,
+    FakePrimaryInitializer,
+    FakePrimaryMarkerWriter,
+)
 
 
 def create_test_config():
@@ -31,7 +37,7 @@ class TestLiteFSDjangoConfigReady:
                 with patch(
                     "litefs_django.apps.get_litefs_settings"
                 ) as mock_get_settings:
-                    # Setup mocks
+                    # Setup Django settings
                     mock_getattr.return_value = {
                         "MOUNT_PATH": "/litefs",
                         "DATA_PATH": "/var/lib/litefs",
@@ -57,31 +63,24 @@ class TestLiteFSDjangoConfigReady:
                     )
                     mock_get_settings.return_value = settings
 
-                    # Setup mocks for injected factories
-                    mock_validator = MagicMock()
-                    mock_resolver = MagicMock()
-                    mock_resolver.resolve_node_id.return_value = "primary-node"
-                    mock_initializer = MagicMock()
-                    mock_initializer.is_primary.return_value = True
+                    # Setup fakes for injected factories
+                    fake_validator = FakeMountValidator()
+                    fake_resolver = FakeNodeIDResolver(node_id="primary-node")
+                    fake_initializer = FakePrimaryInitializer(is_primary=True)
 
                     # Call ready() using test config with injected factories
                     config = create_test_config()
-                    config.mount_validator_factory = MagicMock(
-                        return_value=mock_validator
-                    )
-                    config.node_id_resolver_factory = MagicMock(
-                        return_value=mock_resolver
-                    )
-                    config.primary_initializer_factory = MagicMock(
-                        return_value=mock_initializer
-                    )
+                    config.mount_validator_factory = lambda: fake_validator
+                    config.node_id_resolver_factory = lambda: fake_resolver
+                    config.primary_initializer_factory = lambda _: fake_initializer
                     config.ready()
 
-                    # Verify factories were called
-                    config.node_id_resolver_factory.assert_called_once()
-                    config.primary_initializer_factory.assert_called_once()
-                    mock_initializer.is_primary.assert_called_once_with("primary-node")
-                    mock_resolver.resolve_node_id.assert_called_once()
+                    # Verify behavior: static mode logs primary status
+                    assert any(
+                        "static mode" in record.message.lower()
+                        and "primary" in record.message.lower()
+                        for record in caplog.records
+                    )
 
     def test_runtime_leader_election_uses_primary_detector(self, caplog):
         """Test that raft mode uses PrimaryDetector for runtime detection."""
@@ -90,7 +89,7 @@ class TestLiteFSDjangoConfigReady:
                 with patch(
                     "litefs_django.apps.get_litefs_settings"
                 ) as mock_get_settings:
-                    # Setup mocks
+                    # Setup Django settings
                     mock_getattr.return_value = {
                         "MOUNT_PATH": "/litefs",
                         "DATA_PATH": "/var/lib/litefs",
@@ -118,24 +117,22 @@ class TestLiteFSDjangoConfigReady:
                     )
                     mock_get_settings.return_value = settings
 
-                    # Setup validator and detector mocks
-                    mock_validator = MagicMock()
-                    mock_detector = MagicMock()
-                    mock_detector.is_primary.return_value = False
+                    # Setup fakes
+                    fake_validator = FakeMountValidator()
+                    fake_detector = FakePrimaryDetector(is_primary=False)
 
                     # Call ready() with injected factories
                     config = create_test_config()
-                    config.mount_validator_factory = MagicMock(
-                        return_value=mock_validator
-                    )
-                    config.primary_detector_factory = MagicMock(
-                        return_value=mock_detector
-                    )
+                    config.mount_validator_factory = lambda: fake_validator
+                    config.primary_detector_factory = lambda _: fake_detector
                     config.ready()
 
-                    # Verify detector factory was called
-                    config.primary_detector_factory.assert_called_once_with("/litefs")
-                    mock_detector.is_primary.assert_called_once()
+                    # Verify behavior: raft mode logs replica status
+                    assert any(
+                        "raft mode" in record.message.lower()
+                        and "replica" in record.message.lower()
+                        for record in caplog.records
+                    )
 
     def test_static_mode_logs_primary_status(self, caplog):
         """Test that static mode logs the result of primary detection."""
@@ -144,73 +141,7 @@ class TestLiteFSDjangoConfigReady:
                 with patch(
                     "litefs_django.apps.get_litefs_settings"
                 ) as mock_get_settings:
-                    with patch(
-                        "litefs_django.apps.MountValidator"
-                    ) as mock_validator_class:
-                        with patch(
-                            "litefs_django.apps.PrimaryInitializer"
-                        ) as mock_initializer_class:
-                            with patch(
-                                "litefs_django.apps.EnvironmentNodeIDResolver"
-                            ) as mock_resolver_class:
-                                # Setup mocks for primary node
-                                mock_getattr.return_value = {
-                                    "MOUNT_PATH": "/litefs",
-                                    "DATA_PATH": "/var/lib/litefs",
-                                    "DATABASE_NAME": "db.sqlite3",
-                                    "LEADER_ELECTION": "static",
-                                    "PROXY_ADDR": ":8080",
-                                    "ENABLED": True,
-                                    "RETENTION": "1h",
-                                    "PRIMARY_HOSTNAME": "primary-node",
-                                }
-
-                                static_config = StaticLeaderConfig(
-                                    primary_hostname="primary-node"
-                                )
-                                settings = LiteFSSettings(
-                                    mount_path="/litefs",
-                                    data_path="/var/lib/litefs",
-                                    database_name="db.sqlite3",
-                                    leader_election="static",
-                                    proxy_addr=":8080",
-                                    enabled=True,
-                                    retention="1h",
-                                    static_leader_config=static_config,
-                                )
-                                mock_get_settings.return_value = settings
-
-                                mock_validator = MagicMock()
-                                mock_validator_class.return_value = mock_validator
-
-                                mock_resolver = MagicMock()
-                                mock_resolver.resolve_node_id.return_value = (
-                                    "primary-node"
-                                )
-                                mock_resolver_class.return_value = mock_resolver
-
-                                mock_initializer = MagicMock()
-                                mock_initializer.is_primary.return_value = True
-                                mock_initializer_class.return_value = mock_initializer
-
-                                # Call ready()
-                                config = create_test_config()
-                                config.ready()
-
-                                # Verify logging includes primary status
-                                assert any(
-                                    "primary" in record.message.lower()
-                                    for record in caplog.records
-                                )
-
-    def test_static_mode_handles_missing_node_id_gracefully(self, caplog):
-        """Test that static mode handles missing LITEFS_NODE_ID with warning."""
-        with caplog.at_level(logging.WARNING):
-            with patch("litefs_django.apps.getattr") as mock_getattr:
-                with patch(
-                    "litefs_django.apps.get_litefs_settings"
-                ) as mock_get_settings:
-                    # Setup mocks
+                    # Setup Django settings for primary node
                     mock_getattr.return_value = {
                         "MOUNT_PATH": "/litefs",
                         "DATA_PATH": "/var/lib/litefs",
@@ -235,21 +166,64 @@ class TestLiteFSDjangoConfigReady:
                     )
                     mock_get_settings.return_value = settings
 
-                    # Make resolver raise KeyError (missing LITEFS_NODE_ID)
-                    mock_validator = MagicMock()
-                    mock_resolver = MagicMock()
-                    mock_resolver.resolve_node_id.side_effect = KeyError(
-                        "LITEFS_NODE_ID"
+                    # Setup fakes
+                    fake_validator = FakeMountValidator()
+                    fake_resolver = FakeNodeIDResolver(node_id="primary-node")
+                    fake_initializer = FakePrimaryInitializer(is_primary=True)
+
+                    # Call ready() with injected factories
+                    config = create_test_config()
+                    config.mount_validator_factory = lambda: fake_validator
+                    config.node_id_resolver_factory = lambda: fake_resolver
+                    config.primary_initializer_factory = lambda _: fake_initializer
+                    config.ready()
+
+                    # Verify logging includes primary status
+                    assert any(
+                        "primary" in record.message.lower() for record in caplog.records
                     )
+
+    def test_static_mode_handles_missing_node_id_gracefully(self, caplog):
+        """Test that static mode handles missing LITEFS_NODE_ID with warning."""
+        with caplog.at_level(logging.WARNING):
+            with patch("litefs_django.apps.getattr") as mock_getattr:
+                with patch(
+                    "litefs_django.apps.get_litefs_settings"
+                ) as mock_get_settings:
+                    # Setup Django settings
+                    mock_getattr.return_value = {
+                        "MOUNT_PATH": "/litefs",
+                        "DATA_PATH": "/var/lib/litefs",
+                        "DATABASE_NAME": "db.sqlite3",
+                        "LEADER_ELECTION": "static",
+                        "PROXY_ADDR": ":8080",
+                        "ENABLED": True,
+                        "RETENTION": "1h",
+                        "PRIMARY_HOSTNAME": "primary-node",
+                    }
+
+                    static_config = StaticLeaderConfig(primary_hostname="primary-node")
+                    settings = LiteFSSettings(
+                        mount_path="/litefs",
+                        data_path="/var/lib/litefs",
+                        database_name="db.sqlite3",
+                        leader_election="static",
+                        proxy_addr=":8080",
+                        enabled=True,
+                        retention="1h",
+                        static_leader_config=static_config,
+                    )
+                    mock_get_settings.return_value = settings
+
+                    # Setup fakes - resolver raises KeyError (missing LITEFS_NODE_ID)
+                    fake_validator = FakeMountValidator()
+                    fake_resolver = FakeNodeIDResolver()
+                    fake_resolver.set_missing_node_id()
 
                     # Call ready() - should not raise, just warn
                     config = create_test_config()
-                    config.mount_validator_factory = MagicMock(
-                        return_value=mock_validator
-                    )
-                    config.node_id_resolver_factory = MagicMock(
-                        return_value=mock_resolver
-                    )
+                    config.mount_validator_factory = lambda: fake_validator
+                    config.node_id_resolver_factory = lambda: fake_resolver
                     config.ready()
 
                     # Verify warning was logged
@@ -267,7 +241,7 @@ class TestLiteFSDjangoConfigReady:
                 with patch(
                     "litefs_django.apps.get_litefs_settings"
                 ) as mock_get_settings:
-                    # Setup mocks
+                    # Setup Django settings
                     mock_getattr.return_value = {
                         "MOUNT_PATH": "/litefs",
                         "DATA_PATH": "/var/lib/litefs",
@@ -292,21 +266,15 @@ class TestLiteFSDjangoConfigReady:
                     )
                     mock_get_settings.return_value = settings
 
-                    # Make resolver raise ValueError (empty node ID)
-                    mock_validator = MagicMock()
-                    mock_resolver = MagicMock()
-                    mock_resolver.resolve_node_id.side_effect = ValueError(
-                        "node ID cannot be empty"
-                    )
+                    # Setup fakes - resolver raises ValueError (empty node ID)
+                    fake_validator = FakeMountValidator()
+                    fake_resolver = FakeNodeIDResolver()
+                    fake_resolver.set_invalid_node_id()
 
                     # Call ready() - should not raise, just warn
                     config = create_test_config()
-                    config.mount_validator_factory = MagicMock(
-                        return_value=mock_validator
-                    )
-                    config.node_id_resolver_factory = MagicMock(
-                        return_value=mock_resolver
-                    )
+                    config.mount_validator_factory = lambda: fake_validator
+                    config.node_id_resolver_factory = lambda: fake_resolver
                     config.ready()
 
                     # Verify warning was logged
@@ -324,64 +292,7 @@ class TestLiteFSDjangoConfigReady:
                 with patch(
                     "litefs_django.apps.get_litefs_settings"
                 ) as mock_get_settings:
-                    with patch(
-                        "litefs_django.apps.MountValidator"
-                    ) as mock_validator_class:
-                        with patch(
-                            "litefs_django.apps.PrimaryDetector"
-                        ) as mock_detector_class:
-                            # Setup mocks
-                            mock_getattr.return_value = {
-                                "MOUNT_PATH": "/litefs",
-                                "DATA_PATH": "/var/lib/litefs",
-                                "DATABASE_NAME": "db.sqlite3",
-                                "LEADER_ELECTION": "raft",
-                                "PROXY_ADDR": ":8080",
-                                "ENABLED": True,
-                                "RETENTION": "1h",
-                                "RAFT_SELF_ADDR": "localhost:4321",
-                                "RAFT_PEERS": ["node1:4321"],
-                            }
-
-                            settings = LiteFSSettings(
-                                mount_path="/litefs",
-                                data_path="/var/lib/litefs",
-                                database_name="db.sqlite3",
-                                leader_election="raft",
-                                proxy_addr=":8080",
-                                enabled=True,
-                                retention="1h",
-                                raft_self_addr="localhost:4321",
-                                raft_peers=["node1:4321"],
-                                static_leader_config=None,
-                            )
-                            mock_get_settings.return_value = settings
-
-                            mock_validator = MagicMock()
-                            mock_validator_class.return_value = mock_validator
-
-                            mock_detector = MagicMock()
-                            mock_detector.is_primary.return_value = True
-                            mock_detector_class.return_value = mock_detector
-
-                            # Call ready()
-                            config = create_test_config()
-                            config.ready()
-
-                            # Verify logging includes primary status
-                            assert any(
-                                "primary" in record.message.lower()
-                                for record in caplog.records
-                            )
-
-    def test_raft_mode_handles_litefs_not_running(self, caplog):
-        """Test that raft mode handles LiteFSNotRunningError gracefully."""
-        with caplog.at_level(logging.WARNING):
-            with patch("litefs_django.apps.getattr") as mock_getattr:
-                with patch(
-                    "litefs_django.apps.get_litefs_settings"
-                ) as mock_get_settings:
-                    # Setup mocks
+                    # Setup Django settings
                     mock_getattr.return_value = {
                         "MOUNT_PATH": "/litefs",
                         "DATA_PATH": "/var/lib/litefs",
@@ -408,22 +319,65 @@ class TestLiteFSDjangoConfigReady:
                     )
                     mock_get_settings.return_value = settings
 
-                    mock_validator = MagicMock()
+                    # Setup fakes for injected factories
+                    fake_validator = FakeMountValidator()
+                    fake_detector = FakePrimaryDetector()
+                    fake_detector.set_primary(True)
 
-                    # Make detector raise LiteFSNotRunningError
-                    mock_detector = MagicMock()
-                    mock_detector.is_primary.side_effect = LiteFSNotRunningError(
-                        "LiteFS is not running"
+                    # Call ready() using test config with injected factories
+                    config = create_test_config()
+                    config.mount_validator_factory = lambda: fake_validator
+                    config.primary_detector_factory = lambda _: fake_detector
+                    config.ready()
+
+                    # Verify logging includes primary status
+                    assert any(
+                        "primary" in record.message.lower() for record in caplog.records
                     )
+
+    def test_raft_mode_handles_litefs_not_running(self, caplog):
+        """Test that raft mode handles LiteFSNotRunningError gracefully."""
+        with caplog.at_level(logging.WARNING):
+            with patch("litefs_django.apps.getattr") as mock_getattr:
+                with patch(
+                    "litefs_django.apps.get_litefs_settings"
+                ) as mock_get_settings:
+                    # Setup Django settings
+                    mock_getattr.return_value = {
+                        "MOUNT_PATH": "/litefs",
+                        "DATA_PATH": "/var/lib/litefs",
+                        "DATABASE_NAME": "db.sqlite3",
+                        "LEADER_ELECTION": "raft",
+                        "PROXY_ADDR": ":8080",
+                        "ENABLED": True,
+                        "RETENTION": "1h",
+                        "RAFT_SELF_ADDR": "localhost:4321",
+                        "RAFT_PEERS": ["node1:4321"],
+                    }
+
+                    settings = LiteFSSettings(
+                        mount_path="/litefs",
+                        data_path="/var/lib/litefs",
+                        database_name="db.sqlite3",
+                        leader_election="raft",
+                        proxy_addr=":8080",
+                        enabled=True,
+                        retention="1h",
+                        raft_self_addr="localhost:4321",
+                        raft_peers=["node1:4321"],
+                        static_leader_config=None,
+                    )
+                    mock_get_settings.return_value = settings
+
+                    # Setup fakes - detector raises LiteFSNotRunningError
+                    fake_validator = FakeMountValidator()
+                    fake_detector = FakePrimaryDetector()
+                    fake_detector.set_litefs_not_running()
 
                     # Call ready() - should not raise, just warn
                     config = create_test_config()
-                    config.mount_validator_factory = MagicMock(
-                        return_value=mock_validator
-                    )
-                    config.primary_detector_factory = MagicMock(
-                        return_value=mock_detector
-                    )
+                    config.mount_validator_factory = lambda: fake_validator
+                    config.primary_detector_factory = lambda _: fake_detector
                     config.ready()
 
                     # Verify warning was logged
@@ -490,7 +444,7 @@ class TestLiteFSDjangoConfigReady:
                 with patch(
                     "litefs_django.apps.get_litefs_settings"
                 ) as mock_get_settings:
-                    # Setup mocks
+                    # Setup Django settings
                     mock_getattr.return_value = {
                         "MOUNT_PATH": "/litefs",
                         "DATA_PATH": "/var/lib/litefs",
@@ -517,17 +471,13 @@ class TestLiteFSDjangoConfigReady:
                     )
                     mock_get_settings.return_value = settings
 
-                    # Make validator raise exception
-                    mock_validator = MagicMock()
-                    mock_validator.validate.side_effect = Exception(
-                        "Mount path not found"
-                    )
+                    # Setup fake - validator raises exception
+                    fake_validator = FakeMountValidator()
+                    fake_validator.set_error(Exception("Mount path not found"))
 
                     # Call ready() - should not raise, just warn
                     config = create_test_config()
-                    config.mount_validator_factory = MagicMock(
-                        return_value=mock_validator
-                    )
+                    config.mount_validator_factory = lambda: fake_validator
                     config.ready()
 
                     # Verify warning was logged about validation failure
@@ -550,7 +500,7 @@ class TestPrimaryMarkerWriting:
                 with patch(
                     "litefs_django.apps.get_litefs_settings"
                 ) as mock_get_settings:
-                    # Setup mocks for primary node
+                    # Setup Django settings for primary node
                     mock_getattr.return_value = {
                         "MOUNT_PATH": "/litefs",
                         "DATA_PATH": "/var/lib/litefs",
@@ -576,27 +526,17 @@ class TestPrimaryMarkerWriting:
                     mock_get_settings.return_value = settings
 
                     # Setup fakes
-                    mock_validator = MagicMock()
-                    mock_resolver = MagicMock()
-                    mock_resolver.resolve_node_id.return_value = "primary-node"
-                    mock_initializer = MagicMock()
-                    mock_initializer.is_primary.return_value = True
+                    fake_validator = FakeMountValidator()
+                    fake_resolver = FakeNodeIDResolver(node_id="primary-node")
+                    fake_initializer = FakePrimaryInitializer(is_primary=True)
                     fake_marker_writer = FakePrimaryMarkerWriter()
 
                     # Call ready()
                     config = create_test_config()
-                    config.mount_validator_factory = MagicMock(
-                        return_value=mock_validator
-                    )
-                    config.node_id_resolver_factory = MagicMock(
-                        return_value=mock_resolver
-                    )
-                    config.primary_initializer_factory = MagicMock(
-                        return_value=mock_initializer
-                    )
-                    config.primary_marker_writer_factory = MagicMock(
-                        return_value=fake_marker_writer
-                    )
+                    config.mount_validator_factory = lambda: fake_validator
+                    config.node_id_resolver_factory = lambda: fake_resolver
+                    config.primary_initializer_factory = lambda _: fake_initializer
+                    config.primary_marker_writer_factory = lambda _: fake_marker_writer
                     config._marker_writer = None
                     config._write_primary_marker = (
                         LiteFSDjangoConfig._write_primary_marker.__get__(config)
@@ -614,7 +554,7 @@ class TestPrimaryMarkerWriting:
                 with patch(
                     "litefs_django.apps.get_litefs_settings"
                 ) as mock_get_settings:
-                    # Setup mocks for replica node
+                    # Setup Django settings for replica node
                     mock_getattr.return_value = {
                         "MOUNT_PATH": "/litefs",
                         "DATA_PATH": "/var/lib/litefs",
@@ -640,29 +580,17 @@ class TestPrimaryMarkerWriting:
                     mock_get_settings.return_value = settings
 
                     # Setup fakes - this node is NOT primary
-                    mock_validator = MagicMock()
-                    mock_resolver = MagicMock()
-                    mock_resolver.resolve_node_id.return_value = "replica-node"
-                    mock_initializer = MagicMock()
-                    mock_initializer.is_primary.return_value = (
-                        False  # This is a replica
-                    )
+                    fake_validator = FakeMountValidator()
+                    fake_resolver = FakeNodeIDResolver(node_id="replica-node")
+                    fake_initializer = FakePrimaryInitializer(is_primary=False)
                     fake_marker_writer = FakePrimaryMarkerWriter()
 
                     # Call ready()
                     config = create_test_config()
-                    config.mount_validator_factory = MagicMock(
-                        return_value=mock_validator
-                    )
-                    config.node_id_resolver_factory = MagicMock(
-                        return_value=mock_resolver
-                    )
-                    config.primary_initializer_factory = MagicMock(
-                        return_value=mock_initializer
-                    )
-                    config.primary_marker_writer_factory = MagicMock(
-                        return_value=fake_marker_writer
-                    )
+                    config.mount_validator_factory = lambda: fake_validator
+                    config.node_id_resolver_factory = lambda: fake_resolver
+                    config.primary_initializer_factory = lambda _: fake_initializer
+                    config.primary_marker_writer_factory = lambda _: fake_marker_writer
                     config._marker_writer = None
                     config._write_primary_marker = (
                         LiteFSDjangoConfig._write_primary_marker.__get__(config)
@@ -679,7 +607,7 @@ class TestPrimaryMarkerWriting:
                 with patch(
                     "litefs_django.apps.get_litefs_settings"
                 ) as mock_get_settings:
-                    # Setup mocks for primary node
+                    # Setup Django settings for primary node
                     mock_getattr.return_value = {
                         "MOUNT_PATH": "/litefs",
                         "DATA_PATH": "/var/lib/litefs",
@@ -705,11 +633,9 @@ class TestPrimaryMarkerWriting:
                     mock_get_settings.return_value = settings
 
                     # Setup fakes with write error
-                    mock_validator = MagicMock()
-                    mock_resolver = MagicMock()
-                    mock_resolver.resolve_node_id.return_value = "primary-node"
-                    mock_initializer = MagicMock()
-                    mock_initializer.is_primary.return_value = True
+                    fake_validator = FakeMountValidator()
+                    fake_resolver = FakeNodeIDResolver(node_id="primary-node")
+                    fake_initializer = FakePrimaryInitializer(is_primary=True)
                     fake_marker_writer = FakePrimaryMarkerWriter()
                     fake_marker_writer.set_write_error(
                         OSError("Permission denied: /litefs/.primary")
@@ -717,18 +643,10 @@ class TestPrimaryMarkerWriting:
 
                     # Call ready() - should not raise
                     config = create_test_config()
-                    config.mount_validator_factory = MagicMock(
-                        return_value=mock_validator
-                    )
-                    config.node_id_resolver_factory = MagicMock(
-                        return_value=mock_resolver
-                    )
-                    config.primary_initializer_factory = MagicMock(
-                        return_value=mock_initializer
-                    )
-                    config.primary_marker_writer_factory = MagicMock(
-                        return_value=fake_marker_writer
-                    )
+                    config.mount_validator_factory = lambda: fake_validator
+                    config.node_id_resolver_factory = lambda: fake_resolver
+                    config.primary_initializer_factory = lambda _: fake_initializer
+                    config.primary_marker_writer_factory = lambda _: fake_marker_writer
                     config._marker_writer = None
                     config._write_primary_marker = (
                         LiteFSDjangoConfig._write_primary_marker.__get__(config)
@@ -750,7 +668,7 @@ class TestPrimaryMarkerWriting:
                 with patch(
                     "litefs_django.apps.get_litefs_settings"
                 ) as mock_get_settings:
-                    # Setup mocks
+                    # Setup Django settings
                     mock_getattr.return_value = {
                         "MOUNT_PATH": "/litefs",
                         "DATA_PATH": "/var/lib/litefs",
@@ -776,28 +694,18 @@ class TestPrimaryMarkerWriting:
                     mock_get_settings.return_value = settings
 
                     # Setup fakes - marker already exists with different content
-                    mock_validator = MagicMock()
-                    mock_resolver = MagicMock()
-                    mock_resolver.resolve_node_id.return_value = "new-primary"
-                    mock_initializer = MagicMock()
-                    mock_initializer.is_primary.return_value = True
+                    fake_validator = FakeMountValidator()
+                    fake_resolver = FakeNodeIDResolver(node_id="new-primary")
+                    fake_initializer = FakePrimaryInitializer(is_primary=True)
                     fake_marker_writer = FakePrimaryMarkerWriter()
                     fake_marker_writer.set_initial_content("old-primary")  # Different!
 
                     # Call ready()
                     config = create_test_config()
-                    config.mount_validator_factory = MagicMock(
-                        return_value=mock_validator
-                    )
-                    config.node_id_resolver_factory = MagicMock(
-                        return_value=mock_resolver
-                    )
-                    config.primary_initializer_factory = MagicMock(
-                        return_value=mock_initializer
-                    )
-                    config.primary_marker_writer_factory = MagicMock(
-                        return_value=fake_marker_writer
-                    )
+                    config.mount_validator_factory = lambda: fake_validator
+                    config.node_id_resolver_factory = lambda: fake_resolver
+                    config.primary_initializer_factory = lambda _: fake_initializer
+                    config.primary_marker_writer_factory = lambda _: fake_marker_writer
                     config._marker_writer = None
                     config._write_primary_marker = (
                         LiteFSDjangoConfig._write_primary_marker.__get__(config)

@@ -4,7 +4,13 @@ import os
 
 import pytest
 
-from .fakes import FakePrimaryDetector
+from .fakes import (
+    FakeMountValidator,
+    FakeNodeIDResolver,
+    FakePrimaryDetector,
+    FakePrimaryInitializer,
+    FakePrimaryMarkerWriter,
+)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -86,7 +92,6 @@ def django_settings_reset():
             # Test code here
             # Settings will be restored automatically
     """
-    from django.conf import settings
     from django.test import override_settings
 
     # Use Django's override_settings context manager for proper isolation
@@ -125,3 +130,59 @@ def mock_installation_checker():
                 "checker": mock_checker,
                 "binary_path": binary_path,
             }
+
+
+@pytest.fixture
+def fake_mount_validator():
+    """Provide FakeMountValidator for unit tests.
+
+    Use instead of mocking MountValidator for cleaner, faster tests.
+
+    Example:
+        def test_mount_validation_fails(fake_mount_validator):
+            fake_mount_validator.set_error(Exception("Mount not found"))
+            # Test code that handles validation failure
+    """
+    return FakeMountValidator()
+
+
+@pytest.fixture
+def fake_node_id_resolver():
+    """Provide FakeNodeIDResolver for unit tests.
+
+    Use instead of mocking NodeIDResolver for cleaner, faster tests.
+
+    Example:
+        def test_primary_node_detection(fake_node_id_resolver):
+            fake_node_id_resolver.set_node_id("primary-node")
+            # Test code that uses node ID
+    """
+    return FakeNodeIDResolver()
+
+
+@pytest.fixture
+def fake_primary_initializer():
+    """Provide FakePrimaryInitializer for unit tests.
+
+    Use instead of mocking PrimaryInitializer for cleaner, faster tests.
+
+    Example:
+        def test_static_mode_primary(fake_primary_initializer):
+            fake_primary_initializer.set_primary(True)
+            # Test code that checks primary status
+    """
+    return FakePrimaryInitializer()
+
+
+@pytest.fixture
+def fake_primary_marker_writer():
+    """Provide FakePrimaryMarkerWriter for unit tests.
+
+    Use instead of mocking PrimaryMarkerWriter for cleaner, faster tests.
+
+    Example:
+        def test_marker_writing(fake_primary_marker_writer):
+            fake_primary_marker_writer.write_marker("node1")
+            assert fake_primary_marker_writer.read_marker() == "node1"
+    """
+    return FakePrimaryMarkerWriter()

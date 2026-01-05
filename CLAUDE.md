@@ -87,8 +87,10 @@ PyPI Packages:
 
 | Package | Directory | Run Tests | Run Mypy |
 |---------|-----------|-----------|----------|
-| litefs-py | `packages/litefs/` | `cd packages/litefs && uv run pytest ../../tests/core/` | `cd packages/litefs && uv run mypy src/litefs/` |
-| litefs-django | `packages/litefs-django/` | `cd packages/litefs-django && uv run pytest ../../tests/django_adapter/` | `cd packages/litefs-django && uv run mypy src/litefs_django/` |
+| litefs-py | `packages/litefs/` | `make test` | `make typecheck` |
+| litefs-django | `packages/litefs-django/` | `make test` | `make typecheck` |
+
+**Note**: Each package has its own Makefile. Run commands from the package directory (e.g., `cd packages/litefs && make test`).
 
 ### Test Locations
 
