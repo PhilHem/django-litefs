@@ -107,6 +107,7 @@ PyPI Packages:
 - **Port tests**: See `tests/core/unit/adapters/test_ports.py`
 - **Django adapter tests**: See `tests/django_adapter/unit/test_settings.py`
 - **Django AppConfig tests**: See `tests/django_adapter/unit/test_apps.py`
+- **Adapter fakes**: See `tests/core/unit/adapters/adapter_fakes.py` (note: named `adapter_fakes.py` to avoid conflict with `fakes/` test subdirectory)
 
 #### Testing Django AppConfig
 
