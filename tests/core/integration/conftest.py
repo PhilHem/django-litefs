@@ -20,16 +20,16 @@ def pytest_configure(config: Any) -> None:
         "markers", "concurrency: Concurrency tests with timing constraints"
     )
     config.addinivalue_line(
-        "markers", "tier(level): Test tier (0=instant, 1=fast, 2=standard, 3=slow, 4=manual)"
+        "markers",
+        "tier(level): Test tier (0=instant, 1=fast, 2=standard, 3=slow, 4=manual)",
     )
-    config.addinivalue_line(
-        "markers", "tra(anchor): Test Responsibility Anchor"
-    )
+    config.addinivalue_line("markers", "tra(anchor): Test Responsibility Anchor")
     config.addinivalue_line(
         "markers", "legacy: Legacy tests without TRA marker (being migrated)"
     )
     config.addinivalue_line(
-        "markers", "no_parallel: Tests that cannot run in parallel (shared state/filesystem)"
+        "markers",
+        "no_parallel: Tests that cannot run in parallel (shared state/filesystem)",
     )
 
 
@@ -296,21 +296,18 @@ class ClusterFixture:
         Each node has a unique name (node-1, node-2, etc.) and is networked
         together via a shared network.
 
+        The generated configuration includes:
+        - LiteFS test image with FUSE support
+        - Volume mounts for data and LiteFS mount paths
+        - Privileged mode for FUSE filesystem access
+        - Health checks via Prometheus metrics endpoint
+        - Static leader election with node-1 as primary
+
         Returns:
             String containing valid docker-compose.yml YAML content.
         """
-        services: dict[str, dict[str, Any]] = {}
-        for i in range(self.node_count):
-            node_name = f"node-{i + 1}"
-            services[node_name] = {
-                "image": "litefs:latest",
-                "container_name": f"{self.cluster_name}-{node_name}",
-                "environment": {
-                    "NODE_ID": node_name,
-                    "CLUSTER_NAME": self.cluster_name,
-                },
-                "networks": ["litefs-cluster"],
-            }
+        # First node is the primary for static leader election
+        primary_hostname = "node-1"
 
         # Convert to YAML manually (avoid extra dependency)
         yaml_lines: list[str] = []
@@ -318,22 +315,62 @@ class ClusterFixture:
         yaml_lines.append("")
         yaml_lines.append("services:")
 
-        for node_name, config in services.items():
-            yaml_lines.append(f"  {node_name}:")
-            image_val: Any = config["image"]
-            yaml_lines.append(f"    image: {image_val}")
-            container_val: Any = config["container_name"]
-            yaml_lines.append(f"    container_name: {container_val}")
-            yaml_lines.append("    environment:")
-            env_dict: Any = config["environment"]
-            for key, value in env_dict.items():
-                yaml_lines.append(f"      {key}: {value}")
-            yaml_lines.append("    networks:")
-            networks_list: Any = config["networks"]
-            for network in networks_list:
-                yaml_lines.append(f"      - {network}")
+        for i in range(self.node_count):
+            node_name = f"node-{i + 1}"
+            container_name = f"{self.cluster_name}-{node_name}"
+            base_port = 9090 + i  # Metrics ports: 9090, 9091, 9092, ...
 
+            yaml_lines.append(f"  {node_name}:")
+            yaml_lines.append("    image: litefs-test:latest")
+            yaml_lines.append(f"    container_name: {container_name}")
+            yaml_lines.append(f"    hostname: {node_name}")
+
+            # Environment variables for LiteFS configuration
+            yaml_lines.append("    environment:")
+            yaml_lines.append(f"      NODE_ID: {node_name}")
+            yaml_lines.append(f"      CLUSTER_NAME: {self.cluster_name}")
+            yaml_lines.append(f"      LITEFS_HOSTNAME: {node_name}")
+            yaml_lines.append(f"      LITEFS_PRIMARY_HOSTNAME: {primary_hostname}")
+            yaml_lines.append("      LITEFS_MOUNT_PATH: /litefs")
+            yaml_lines.append("      LITEFS_DATA_PATH: /data")
+            yaml_lines.append("      LITEFS_LEASE_TYPE: static")
+
+            # Volume mounts for persistence
+            yaml_lines.append("    volumes:")
+            yaml_lines.append(f"      - {node_name}_data:/data")
+            yaml_lines.append(f"      - {node_name}_litefs:/litefs")
+
+            # FUSE requires privileged mode or specific capabilities
+            yaml_lines.append("    privileged: true")
+            yaml_lines.append("    devices:")
+            yaml_lines.append("      - /dev/fuse:/dev/fuse")
+
+            # Port mapping for metrics endpoint (used by health check)
+            yaml_lines.append("    ports:")
+            yaml_lines.append(f'      - "{base_port}:9090"')
+
+            # Health check via Prometheus metrics endpoint
+            yaml_lines.append("    healthcheck:")
+            yaml_lines.append(
+                '      test: ["CMD", "curl", "-f", "http://localhost:9090/metrics"]'
+            )
+            yaml_lines.append("      interval: 5s")
+            yaml_lines.append("      timeout: 3s")
+            yaml_lines.append("      retries: 5")
+            yaml_lines.append("      start_period: 10s")
+
+            yaml_lines.append("    networks:")
+            yaml_lines.append("      - litefs-cluster")
+            yaml_lines.append("")
+
+        # Volume definitions
+        yaml_lines.append("volumes:")
+        for i in range(self.node_count):
+            node_name = f"node-{i + 1}"
+            yaml_lines.append(f"  {node_name}_data:")
+            yaml_lines.append(f"  {node_name}_litefs:")
         yaml_lines.append("")
+
         yaml_lines.append("networks:")
         yaml_lines.append("  litefs-cluster:")
         yaml_lines.append("    driver: bridge")
