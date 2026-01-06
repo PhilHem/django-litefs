@@ -11,6 +11,7 @@ ARG LITEFS_VERSION=0.5.11
 FROM debian:bookworm-slim AS litefs-downloader
 
 ARG LITEFS_VERSION
+ARG TARGETARCH
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -18,11 +19,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tar \
     && rm -rf /var/lib/apt/lists/*
 
-# Download LiteFS for Linux amd64
-RUN curl -fsSL "https://github.com/superfly/litefs/releases/download/v${LITEFS_VERSION}/litefs-v${LITEFS_VERSION}-linux-amd64.tar.gz" \
+# Download LiteFS for target architecture (amd64 or arm64)
+RUN curl -fsSL "https://github.com/superfly/litefs/releases/download/v${LITEFS_VERSION}/litefs-v${LITEFS_VERSION}-linux-${TARGETARCH}.tar.gz" \
     | tar -xzf - -C /tmp \
     && chmod +x /tmp/litefs \
-    && /tmp/litefs --version
+    && /tmp/litefs version
 
 # Stage 2: Build test node image
 FROM python:${PYTHON_VERSION}-slim
@@ -42,7 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy LiteFS binary from downloader stage
 COPY --from=litefs-downloader /tmp/litefs /usr/local/bin/litefs
-RUN chmod +x /usr/local/bin/litefs && litefs --version
+RUN chmod +x /usr/local/bin/litefs && litefs version
 
 # Create required directories
 RUN mkdir -p /litefs /data /app
