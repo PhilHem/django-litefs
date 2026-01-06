@@ -1,7 +1,14 @@
 """Health checker use case for determining node health."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from litefs.domain.health import HealthStatus
 from litefs.adapters.ports import PrimaryDetectorPort
+
+if TYPE_CHECKING:
+    from litefs.adapters.metrics_port import MetricsPort
 
 
 class HealthChecker:
@@ -23,6 +30,7 @@ class HealthChecker:
         primary_detector: PrimaryDetectorPort,
         degraded: bool = False,
         unhealthy: bool = False,
+        metrics: MetricsPort | None = None,
     ) -> None:
         """Initialize the health checker.
 
@@ -31,10 +39,12 @@ class HealthChecker:
             degraded: If True, node health is degraded. Defaults to False.
             unhealthy: If True, node is unhealthy. Defaults to False.
                       Takes precedence over degraded flag.
+            metrics: Optional port for emitting health metrics.
         """
         self.primary_detector = primary_detector
         self.degraded = degraded
         self.unhealthy = unhealthy
+        self._metrics = metrics
 
     def check_health(self) -> HealthStatus:
         """Check the current health status of this node.
@@ -63,5 +73,9 @@ class HealthChecker:
             state = "degraded"
         else:
             state = "healthy"
+
+        # Emit health status metric
+        if self._metrics is not None:
+            self._metrics.set_health_status(state)  # type: ignore
 
         return HealthStatus(state=state)  # type: ignore

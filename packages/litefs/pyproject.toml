@@ -11,6 +11,9 @@ dependencies = [
 [project.optional-dependencies]
 # Install with `pip install litefs-py[raft]` once py-leader is published to PyPI
 raft = ["py-leader>=0.1.0"]
+metrics = [
+    "prometheus-client>=0.20.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -42,6 +45,7 @@ dev = [
     "mypy>=1.11.0",
     "pytest-bdd>=8.1.0",
     "ruff>=0.8.0",
+    "prometheus-client>=0.20.0",
 ]
 
 [tool.uv.sources]

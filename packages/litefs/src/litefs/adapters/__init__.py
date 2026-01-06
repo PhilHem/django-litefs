@@ -13,6 +13,7 @@ from litefs.adapters.ports import (
     BinaryDownloaderPort,
     BinaryResolverPort,
 )
+from litefs.adapters.metrics_port import MetricsPort, NoOpMetricsAdapter
 from litefs.adapters.raft_leader_election_adapter import RaftLeaderElectionAdapter
 from litefs.adapters.httpx_forwarding import HTTPXForwardingAdapter
 from litefs.adapters.platform_detector import OsPlatformDetector
@@ -36,12 +37,6 @@ __all__ = [
     "HttpxBinaryDownloader",
     "BinaryResolverPort",
     "FilesystemBinaryResolver",
+    "MetricsPort",
+    "NoOpMetricsAdapter",
 ]
-
-
-
-
-
-
-
-

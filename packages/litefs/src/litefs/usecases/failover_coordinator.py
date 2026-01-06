@@ -10,6 +10,7 @@ from litefs.domain.events import FailoverEvent, FailoverEventType
 
 if TYPE_CHECKING:
     from litefs.adapters.ports import EventEmitterPort, LoggingPort
+    from litefs.adapters.metrics_port import MetricsPort
 
 
 class NodeState(Enum):
@@ -57,6 +58,7 @@ class FailoverCoordinator:
         leader_election: LeaderElectionPort,
         event_emitter: EventEmitterPort | None = None,
         logger: LoggingPort | None = None,
+        metrics: MetricsPort | None = None,
     ) -> None:
         """Initialize the failover coordinator.
 
@@ -67,16 +69,21 @@ class FailoverCoordinator:
             leader_election: Port implementation for leader election consensus.
             event_emitter: Optional port for emitting state transition events.
             logger: Optional port for logging warnings when promotion is blocked.
+            metrics: Optional port for emitting state metrics.
         """
         self.leader_election = leader_election
         self._event_emitter = event_emitter
         self._logger = logger
+        self._metrics = metrics
         self._current_state = (
             NodeState.PRIMARY
             if leader_election.is_leader_elected()
             else NodeState.REPLICA
         )
         self._healthy = True
+
+        # Set initial metrics
+        self._update_state_metrics()
 
     @property
     def state(self) -> NodeState:
@@ -87,6 +94,12 @@ class FailoverCoordinator:
             NodeState.REPLICA otherwise.
         """
         return self._current_state
+
+    def _update_state_metrics(self) -> None:
+        """Update node state and leader election metrics."""
+        if self._metrics is not None:
+            self._metrics.set_node_state(self._current_state == NodeState.PRIMARY)
+            self._metrics.set_leader_elected(self.leader_election.is_leader_elected())
 
     def coordinate_transition(self) -> None:
         """Coordinate a state transition based on current election status.
@@ -111,11 +124,13 @@ class FailoverCoordinator:
         if is_elected and not current_is_primary:
             self._current_state = NodeState.PRIMARY
             self._emit_event(FailoverEventType.PROMOTED_TO_PRIMARY)
+            self._update_state_metrics()
 
         # Transition from PRIMARY to REPLICA
         elif not is_elected and current_is_primary:
             self._current_state = NodeState.REPLICA
             self._emit_event(FailoverEventType.DEMOTED_TO_REPLICA)
+            self._update_state_metrics()
 
     def can_maintain_leadership(self) -> bool:
         """Check if this node can maintain leadership.

@@ -231,6 +231,8 @@ class LiteFSSettings:
     static_leader_config: StaticLeaderConfig | None = None
     proxy: ProxySettings | None = None
     forwarding: ForwardingSettings | None = None
+    metrics_enabled: bool = False
+    metrics_prefix: str = "litefs"
 
     def __post_init__(self) -> None:
         """Validate settings after initialization."""

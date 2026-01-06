@@ -9,9 +9,13 @@ current state of all nodes in the cluster.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from litefs.adapters.ports import SplitBrainDetectorPort
 from litefs.domain.split_brain import RaftNodeState
+
+if TYPE_CHECKING:
+    from litefs.adapters.metrics_port import MetricsPort
 
 
 @dataclass(frozen=True)
@@ -52,13 +56,19 @@ class SplitBrainDetector:
         synchronization of cluster state access.
     """
 
-    def __init__(self, port: SplitBrainDetectorPort) -> None:
+    def __init__(
+        self,
+        port: SplitBrainDetectorPort,
+        metrics: MetricsPort | None = None,
+    ) -> None:
         """Initialize the split-brain detector.
 
         Args:
             port: Implementation of SplitBrainDetectorPort for cluster state access.
+            metrics: Optional port for emitting split-brain detection metrics.
         """
         self.port = port
+        self._metrics = metrics
 
     def detect_split_brain(self) -> SplitBrainStatus:
         """Detect if a split-brain condition exists in the cluster.
@@ -82,6 +92,10 @@ class SplitBrainDetector:
 
         # Split-brain is detected when more than one node claims leadership
         is_split_brain = len(leader_nodes) > 1
+
+        # Emit split-brain metric
+        if self._metrics is not None:
+            self._metrics.set_split_brain_detected(is_split_brain)
 
         return SplitBrainStatus(
             is_split_brain=is_split_brain, leader_nodes=leader_nodes
