@@ -17,7 +17,11 @@ from litefs.usecases.primary_detector import PrimaryDetector
 from litefs.usecases.split_brain_detector import SplitBrainDetector
 from litefs.usecases.sql_detector import SQLDetector
 from litefs_django.exceptions import NotPrimaryError, SplitBrainError
-from litefs_django.settings import is_dev_mode
+from litefs_django.settings import (
+    is_dev_mode,
+    get_dev_mode_reason,
+    detect_litefs_artifacts,
+)
 
 if TYPE_CHECKING:
     from sqlite3 import Connection
@@ -235,9 +239,10 @@ class DatabaseWrapper(SQLite3DatabaseWrapper):
                 injection. If not provided, a new SplitBrainDetector is created.
                 Use this for testing with FakeSplitBrainDetector.
         """
-        # Check if dev mode is enabled
+        # Check if dev mode is enabled (auto-detect from DEBUG)
         litefs_config = getattr(django_settings, "LITEFS", None)
-        self._dev_mode = is_dev_mode(litefs_config)
+        debug_mode = getattr(django_settings, "DEBUG", False)
+        self._dev_mode = is_dev_mode(litefs_config, debug=debug_mode)
 
         # Extract OPTIONS for configuration validation
         options = settings_dict.get("OPTIONS", {})

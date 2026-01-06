@@ -3,7 +3,12 @@
 import pytest
 from hypothesis import given, strategies as st
 
-from litefs.domain.settings import LiteFSSettings, StaticLeaderConfig, ForwardingSettings, LiteFSConfigError
+from litefs.domain.settings import (
+    LiteFSSettings,
+    StaticLeaderConfig,
+    ForwardingSettings,
+    LiteFSConfigError,
+)
 from litefs_django.settings import get_litefs_settings, is_dev_mode
 
 
@@ -110,13 +115,18 @@ class TestSettingsReader:
         proxy_addr=st.text(min_size=1, max_size=50),
         enabled=st.booleans(),
         retention=st.text(min_size=1, max_size=20),
-        primary_hostname=st.one_of(st.none(), st.text(
-            alphabet=st.characters(
-                min_codepoint=33, max_codepoint=126,
-                blacklist_characters=" \t\n\r",
+        primary_hostname=st.one_of(
+            st.none(),
+            st.text(
+                alphabet=st.characters(
+                    min_codepoint=33,
+                    max_codepoint=126,
+                    blacklist_characters=" \t\n\r",
+                ),
+                min_size=1,
+                max_size=50,
             ),
-            min_size=1, max_size=50
-        )),
+        ),
         raft_self_addr=st.one_of(st.none(), st.text(min_size=1, max_size=100)),
         raft_peers=st.one_of(
             st.none(),
@@ -188,7 +198,9 @@ class TestSettingsReader:
         # (not for raft mode, where it shouldn't appear in converted_back even if generated)
         if "PRIMARY_HOSTNAME" in django_settings:
             if settings.static_leader_config is not None:
-                converted_back["PRIMARY_HOSTNAME"] = settings.static_leader_config.primary_hostname
+                converted_back["PRIMARY_HOSTNAME"] = (
+                    settings.static_leader_config.primary_hostname
+                )
         if settings.raft_self_addr is not None:
             converted_back["RAFT_SELF_ADDR"] = settings.raft_self_addr
         if settings.raft_peers is not None:
@@ -202,7 +214,9 @@ class TestSettingsReader:
         assert converted_back["PROXY_ADDR"] == django_settings["PROXY_ADDR"]
         assert converted_back["ENABLED"] == django_settings["ENABLED"]
         assert converted_back["RETENTION"] == django_settings["RETENTION"]
-        assert converted_back.get("PRIMARY_HOSTNAME") == django_settings.get("PRIMARY_HOSTNAME")
+        assert converted_back.get("PRIMARY_HOSTNAME") == django_settings.get(
+            "PRIMARY_HOSTNAME"
+        )
         assert converted_back.get("RAFT_SELF_ADDR") == django_settings.get(
             "RAFT_SELF_ADDR"
         )
@@ -418,8 +432,15 @@ class TestSettingsReader:
             get_litefs_settings(django_settings)
         error_message = str(exc_info.value)
         # All 7 required fields should be mentioned
-        for field in ["MOUNT_PATH", "DATA_PATH", "DATABASE_NAME", "LEADER_ELECTION",
-                      "PROXY_ADDR", "ENABLED", "RETENTION"]:
+        for field in [
+            "MOUNT_PATH",
+            "DATA_PATH",
+            "DATABASE_NAME",
+            "LEADER_ELECTION",
+            "PROXY_ADDR",
+            "ENABLED",
+            "RETENTION",
+        ]:
             assert field in error_message, f"Expected {field} in error message"
 
     def test_unknown_keys_are_silently_ignored(self):
@@ -587,7 +608,9 @@ class TestStaticLeaderConfigParsing:
             "PRIMARY_HOSTNAME": "primary-node.example.com",
         }
         settings = get_litefs_settings(django_settings)
-        assert settings.static_leader_config.primary_hostname == "primary-node.example.com"
+        assert (
+            settings.static_leader_config.primary_hostname == "primary-node.example.com"
+        )
 
     @pytest.mark.tier(3)
     @given(
@@ -769,3 +792,147 @@ class TestForwardingConfigParsing:
         settings = get_litefs_settings(django_settings)
 
         assert settings.forwarding is None
+
+
+@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
+class TestIsDevModeWithDebug:
+    """Test is_dev_mode with DEBUG auto-detection."""
+
+    def test_is_dev_mode_debug_true_no_config(self):
+        """Test that dev mode is enabled when DEBUG=True and no LITEFS config."""
+        assert is_dev_mode(None, debug=True) is True
+
+    def test_is_dev_mode_debug_false_no_config(self):
+        """Test that dev mode is False when DEBUG=False and no config (backward compat)."""
+        assert is_dev_mode(None, debug=False) is True
+
+    def test_is_dev_mode_debug_true_enabled_true(self):
+        """Test that production mode is used when LITEFS enabled despite DEBUG."""
+        django_settings = {"ENABLED": True}
+        assert is_dev_mode(django_settings, debug=True) is False
+
+    def test_is_dev_mode_explicit_dev_mode_true(self):
+        """Test that DEV_MODE=True forces dev mode."""
+        django_settings = {"DEV_MODE": True, "ENABLED": True}
+        assert is_dev_mode(django_settings, debug=False) is True
+
+    def test_is_dev_mode_explicit_dev_mode_false_overrides_debug(self):
+        """Test that DEV_MODE=False overrides DEBUG=True."""
+        django_settings = {"DEV_MODE": False}
+        assert is_dev_mode(django_settings, debug=True) is False
+
+    def test_is_dev_mode_enabled_false_without_debug(self):
+        """Test that ENABLED=False still works without debug param (backward compat)."""
+        django_settings = {"ENABLED": False}
+        assert is_dev_mode(django_settings) is True
+
+    def test_is_dev_mode_priority_dev_mode_over_enabled(self):
+        """Test that DEV_MODE takes priority over ENABLED."""
+        # DEV_MODE=True should override ENABLED=True
+        django_settings = {"DEV_MODE": True, "ENABLED": True}
+        assert is_dev_mode(django_settings, debug=False) is True
+
+        # DEV_MODE=False should override ENABLED=False
+        django_settings = {"DEV_MODE": False, "ENABLED": False}
+        assert is_dev_mode(django_settings, debug=True) is False
+
+
+@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
+class TestDetectLiteFSArtifacts:
+    """Test detect_litefs_artifacts helper function."""
+
+    def test_detect_artifacts_with_existing_mount_path(self, tmp_path):
+        """Test that existing mount path is detected."""
+        from litefs_django.settings import detect_litefs_artifacts
+
+        mount_path = tmp_path / "litefs"
+        mount_path.mkdir()
+        artifacts = detect_litefs_artifacts(str(mount_path))
+        assert str(mount_path) in artifacts
+
+    def test_detect_artifacts_with_primary_file(self, tmp_path):
+        """Test that .primary file is detected."""
+        from litefs_django.settings import detect_litefs_artifacts
+
+        mount_path = tmp_path / "litefs"
+        mount_path.mkdir()
+        (mount_path / ".primary").touch()
+        artifacts = detect_litefs_artifacts(str(mount_path))
+        assert any(".primary" in a for a in artifacts)
+
+    def test_detect_artifacts_returns_empty_when_none(self, tmp_path):
+        """Test that no artifacts are returned when none exist."""
+        from litefs_django.settings import detect_litefs_artifacts
+
+        nonexistent = str(tmp_path / "nonexistent")
+        artifacts = detect_litefs_artifacts(nonexistent)
+        # Should not find the nonexistent path
+        assert nonexistent not in artifacts
+
+    def test_detect_artifacts_with_none_mount_path(self):
+        """Test that None mount_path is handled gracefully."""
+        from litefs_django.settings import detect_litefs_artifacts
+
+        # Should not raise, just check default paths
+        artifacts = detect_litefs_artifacts(None)
+        assert isinstance(artifacts, list)
+
+    def test_detect_artifacts_only_directories_not_files(self, tmp_path):
+        """Test that only directories (not files) are detected as mount paths."""
+        from litefs_django.settings import detect_litefs_artifacts
+
+        # Create a file, not a directory
+        file_path = tmp_path / "litefs"
+        file_path.touch()
+        artifacts = detect_litefs_artifacts(str(file_path))
+        # Should not include file_path since it's a file, not a directory
+        assert str(file_path) not in artifacts
+
+
+@pytest.mark.unit
+@pytest.mark.tier(1)
+@pytest.mark.tra("Adapter")
+class TestGetDevModeReason:
+    """Test get_dev_mode_reason helper function."""
+
+    def test_reason_debug_no_config(self):
+        """Test reason when DEBUG=True and no config."""
+        from litefs_django.settings import get_dev_mode_reason
+
+        reason = get_dev_mode_reason(None, debug=True)
+        assert reason is not None
+        assert "DEBUG" in reason
+
+    def test_reason_explicit_dev_mode(self):
+        """Test reason when DEV_MODE explicitly set."""
+        from litefs_django.settings import get_dev_mode_reason
+
+        reason = get_dev_mode_reason({"DEV_MODE": True}, debug=False)
+        assert reason is not None
+        assert "DEV_MODE" in reason
+
+    def test_reason_enabled_false(self):
+        """Test reason when ENABLED=False."""
+        from litefs_django.settings import get_dev_mode_reason
+
+        reason = get_dev_mode_reason({"ENABLED": False}, debug=False)
+        assert reason is not None
+        assert "ENABLED" in reason
+
+    def test_reason_production_mode_returns_none(self):
+        """Test that production mode returns None."""
+        from litefs_django.settings import get_dev_mode_reason
+
+        reason = get_dev_mode_reason({"ENABLED": True}, debug=False)
+        assert reason is None
+
+    def test_reason_no_config_no_debug_returns_none(self):
+        """Test that no config without DEBUG returns None (invalid state)."""
+        from litefs_django.settings import get_dev_mode_reason
+
+        reason = get_dev_mode_reason(None, debug=False)
+        assert reason is None

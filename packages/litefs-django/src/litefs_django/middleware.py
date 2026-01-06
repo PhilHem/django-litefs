@@ -120,17 +120,13 @@ class SplitBrainMiddleware:
         If initialization fails, detector remains None and requests are allowed.
         """
         try:
-            from litefs_django.settings import get_litefs_settings
+            from litefs_django.settings import get_litefs_settings, is_dev_mode
 
             litefs_config = getattr(django_settings, "LITEFS", None)
-            if not litefs_config:
-                logger.debug(
-                    "LITEFS settings not found. Split-brain detection disabled."
-                )
-                return
+            debug_mode = getattr(django_settings, "DEBUG", False)
 
-            if not litefs_config.get("ENABLED", True):
-                logger.debug("LiteFS is disabled in settings. Detection disabled.")
+            if is_dev_mode(litefs_config, debug=debug_mode):
+                logger.debug("LiteFS dev mode enabled. Split-brain detection disabled.")
                 return
 
             # Get LiteFS settings domain object
@@ -286,16 +282,14 @@ class WriteForwardingMiddleware:
         If initialization fails, forwarding remains disabled.
         """
         try:
-            from litefs_django.settings import get_litefs_settings
+            from litefs_django.settings import get_litefs_settings, is_dev_mode
             from litefs.adapters.httpx_forwarding import HTTPXForwardingAdapter
 
             litefs_config = getattr(django_settings, "LITEFS", None)
-            if not litefs_config:
-                logger.debug("LITEFS settings not found. Write forwarding disabled.")
-                return
+            debug_mode = getattr(django_settings, "DEBUG", False)
 
-            if not litefs_config.get("ENABLED", True):
-                logger.debug("LiteFS is disabled in settings. Forwarding disabled.")
+            if is_dev_mode(litefs_config, debug=debug_mode):
+                logger.debug("LiteFS dev mode enabled. Write forwarding disabled.")
                 return
 
             # Get LiteFS settings domain object

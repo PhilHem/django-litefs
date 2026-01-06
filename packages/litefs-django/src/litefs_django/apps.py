@@ -8,7 +8,12 @@ from typing import Callable, Any
 from django.apps import AppConfig
 from django.conf import settings as django_settings
 
-from litefs_django.settings import get_litefs_settings
+from litefs_django.settings import (
+    get_litefs_settings,
+    is_dev_mode,
+    get_dev_mode_reason,
+    detect_litefs_artifacts,
+)
 from litefs.usecases.mount_validator import MountValidator
 from litefs.usecases.primary_detector import PrimaryDetector, LiteFSNotRunningError
 from litefs.usecases.primary_initializer import PrimaryInitializer
@@ -74,17 +79,28 @@ class LiteFSDjangoConfig(AppConfig):
 
     def ready(self) -> None:
         """Validate LiteFS settings and check availability on startup."""
-        # Only validate if LiteFS is enabled
         litefs_config = getattr(django_settings, "LITEFS", None)
-        if not litefs_config:
-            logger.warning(
-                "LITEFS settings not found. LiteFS adapter may not work correctly."
-            )
-            return
+        debug_mode = getattr(django_settings, "DEBUG", False)
 
-        # Check if LiteFS is enabled
-        if not litefs_config.get("ENABLED", True):
-            logger.info("LiteFS is disabled in settings.")
+        # Check for dev mode (auto-detected from DEBUG or explicit)
+        if is_dev_mode(litefs_config, debug=debug_mode):
+            reason = get_dev_mode_reason(litefs_config, debug=debug_mode)
+            if reason:
+                logger.info(f"LiteFS dev mode enabled ({reason})")
+            else:
+                # Backward compat: no config without DEBUG
+                logger.warning(
+                    "LITEFS settings not found. LiteFS adapter may not work correctly."
+                )
+
+            # Safety warning: check for LiteFS artifacts
+            mount_path = litefs_config.get("MOUNT_PATH") if litefs_config else None
+            artifacts = detect_litefs_artifacts(mount_path)
+            if artifacts:
+                logger.warning(
+                    f"LiteFS artifacts detected in dev mode: {artifacts}. "
+                    "This may indicate a production environment misconfigured for development."
+                )
             return
 
         try:

@@ -140,27 +140,103 @@ def get_litefs_settings(django_settings: dict[str, Any]) -> LiteFSSettings:
     return LiteFSSettings(**kwargs)
 
 
-def is_dev_mode(django_settings: dict[str, Any] | None) -> bool:
-    """Check if LiteFS is in dev mode (disabled).
+def is_dev_mode(
+    django_settings: dict[str, Any] | None,
+    *,
+    debug: bool = False,
+) -> bool:
+    """Check if LiteFS is in dev mode.
 
-    Dev mode is active when:
-    - LITEFS settings dict is missing entirely (None)
-    - LITEFS.ENABLED is explicitly set to False
-
-    Production mode is active when:
-    - LITEFS dict exists and ENABLED is True or not specified
+    Dev mode priority (highest to lowest):
+    1. DEV_MODE=True explicitly set → dev mode
+    2. DEV_MODE=False explicitly set → production mode
+    3. ENABLED=False → dev mode
+    4. No LITEFS config AND DEBUG=True → dev mode
+    5. No LITEFS config (without DEBUG) → dev mode (backward compat)
+    6. Otherwise → production mode
 
     Args:
         django_settings: Django LITEFS settings dict, or None if not configured
+        debug: Value of Django DEBUG setting (default False)
 
     Returns:
         True if in dev mode (LiteFS disabled), False if in production mode
     """
     if django_settings is None:
+        # No config = dev mode (backward compatible behavior)
+        # With debug=True, it's auto-detected dev mode
+        # With debug=False, it's also dev mode for backward compat
         return True
-    # If ENABLED key exists and is False, we're in dev mode
-    # If ENABLED key doesn't exist or is True, we're in production mode
-    return django_settings.get("ENABLED", True) is False
+
+    # Explicit DEV_MODE setting takes highest priority
+    if "DEV_MODE" in django_settings:
+        return bool(django_settings["DEV_MODE"])
+
+    # ENABLED=False means dev mode
+    if django_settings.get("ENABLED", True) is False:
+        return True
+
+    # Has config with ENABLED=True (or default) = production
+    return False
 
 
+def detect_litefs_artifacts(mount_path: str | None = None) -> list[str]:
+    """Detect LiteFS artifacts that suggest a production environment.
 
+    Used for safety warnings when dev mode is active but LiteFS artifacts
+    are present, which may indicate misconfiguration.
+
+    Args:
+        mount_path: Optional mount path from config to check first
+
+    Returns:
+        List of detected artifact paths (directories and .primary files)
+    """
+    from pathlib import Path
+
+    artifacts: list[str] = []
+    paths_to_check: list[str] = []
+
+    if mount_path:
+        paths_to_check.append(mount_path)
+    paths_to_check.extend(["/litefs", "/mnt/litefs"])
+
+    for path_str in paths_to_check:
+        path = Path(path_str)
+        if path.exists() and path.is_dir():
+            artifacts.append(str(path))
+        primary = path / ".primary"
+        if primary.exists():
+            artifacts.append(str(primary))
+
+    return artifacts
+
+
+def get_dev_mode_reason(
+    django_settings: dict[str, Any] | None,
+    *,
+    debug: bool = False,
+) -> str | None:
+    """Get the reason dev mode is active, or None if production mode.
+
+    Used for logging to help developers understand why dev mode is active.
+
+    Args:
+        django_settings: Django LITEFS settings dict, or None if not configured
+        debug: Value of Django DEBUG setting (default False)
+
+    Returns:
+        Reason string if dev mode is active, None if production mode
+    """
+    if django_settings is None:
+        if debug:
+            return "DEBUG=True and no LITEFS config"
+        return None  # No config without DEBUG = unclear state
+
+    if django_settings.get("DEV_MODE"):
+        return "DEV_MODE=True"
+
+    if django_settings.get("ENABLED", True) is False:
+        return "ENABLED=False"
+
+    return None  # Production mode

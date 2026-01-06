@@ -406,9 +406,9 @@ class TestLiteFSDjangoConfigReady:
                     # Verify get_litefs_settings was NOT called
                     mock_get_settings.assert_not_called()
 
-                    # Verify logging mentions that LiteFS is disabled
+                    # Verify logging mentions dev mode (ENABLED=False triggers dev mode)
                     assert any(
-                        "disabled" in record.message.lower()
+                        "dev mode" in record.message.lower()
                         for record in caplog.records
                     )
 
